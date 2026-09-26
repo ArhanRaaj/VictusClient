@@ -38,6 +38,16 @@ export const AutoUpdateBanner: React.FC = () => {
       if (info && info.updateAvailable) {
         setUpdateInfo(info);
         setIsDismissed(false);
+        if (info.downloadUrl && window.electronAPI?.downloadUpdate) {
+          setIsDownloading(true);
+          setDownloadProgress(5);
+          window.electronAPI.downloadUpdate(info.downloadUrl).then((res) => {
+            if (res && res.success) {
+              setIsReadyToInstall(true);
+              setIsDownloading(false);
+            }
+          }).catch(() => setIsDownloading(false));
+        }
       }
     });
 
@@ -53,6 +63,16 @@ export const AutoUpdateBanner: React.FC = () => {
     window.electronAPI.checkForUpdates?.().then((info: UpdateData) => {
       if (info && info.updateAvailable) {
         setUpdateInfo(info);
+        if (info.downloadUrl && window.electronAPI?.downloadUpdate) {
+          setIsDownloading(true);
+          setDownloadProgress(5);
+          window.electronAPI.downloadUpdate(info.downloadUrl).then((res) => {
+            if (res && res.success) {
+              setIsReadyToInstall(true);
+              setIsDownloading(false);
+            }
+          }).catch(() => setIsDownloading(false));
+        }
       }
     }).catch(() => {});
 
