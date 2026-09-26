@@ -1,0 +1,50 @@
+{
+  "name": "victusclient",
+  "version": "1.0.0",
+  "description": "VictusClient - Premium Modern Minecraft Launcher & Client",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc -p tsconfig.electron.json",
+    "start": "electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "installer": "node scripts/build-installer.js",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "minecraft",
+    "launcher",
+    "client",
+    "gaming",
+    "victusclient",
+    "fabric",
+    "forge",
+    "neoforge"
+  ],
+  "author": "VictusClient Team",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "adm-zip": "^0.5.16",
+    "lucide-react": "^0.460.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "skinview3d": "^3.0.1",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
+    "@types/node": "^22.8.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

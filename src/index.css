@@ -1,0 +1,313 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0a0a0c;
+  --color-surface: #111116;
+  --color-surface-hover: #16161d;
+  --color-sidebar: #6e00ff;
+  --color-sidebar-border: #9d4edd;
+  --color-primary: #9333ea;
+  --color-primary-hover: #a855f7;
+  --color-primary-light: #c084fc;
+  --color-secondary: #06b6d4;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-glow: rgba(147, 51, 234, 0.25);
+}
+
+/* Solid sleek matte black desktop application setup */
+html, body, #root {
+  background: #0a0a0c !important;
+  background-color: #0a0a0c !important;
+  color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================
+   MATTE BLACK GAMING CLIENT INTERFACE
+   Clean, flat, high-contrast, pure matte black surface system
+   ========================================================== */
+
+/* Main Window Shell */
+.victus-window, .smoked-glass-window {
+  background: #0a0a0c;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 25px 65px -15px rgba(0, 0, 0, 0.98),
+    0 0 40px rgba(0, 0, 0, 0.9);
+  border-radius: 20px;
+}
+
+/* 3D Glossy Jewel Traffic Light Buttons */
+.traffic-btn-red {
+  background: radial-gradient(circle at 35% 30%, #ff857e 0%, #ff5247 45%, #d4271c 100%);
+  border: 0.5px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.traffic-btn-red:hover {
+  filter: brightness(1.2);
+  transform: scale(1.12);
+}
+.traffic-btn-red:active {
+  transform: scale(0.92);
+}
+
+.traffic-btn-yellow {
+  background: radial-gradient(circle at 35% 30%, #ffdc73 0%, #ffbd2e 45%, #d48f14 100%);
+  border: 0.5px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.traffic-btn-yellow:hover {
+  filter: brightness(1.2);
+  transform: scale(1.12);
+}
+.traffic-btn-yellow:active {
+  transform: scale(0.92);
+}
+
+.traffic-btn-green {
+  background: radial-gradient(circle at 35% 30%, #63e87d 0%, #2ecc50 45%, #189e34 100%);
+  border: 0.5px solid rgba(0, 0, 0, 0.5);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.traffic-btn-green:hover {
+  filter: brightness(1.2);
+  transform: scale(1.12);
+}
+.traffic-btn-green:active {
+  transform: scale(0.92);
+}
+
+/* Interior Solid Matte Black Cards & Panels */
+.glass-panel {
+  background: #111116;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 12px 32px -8px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: border-color 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 
+    0 16px 40px -8px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Creation Modal Solid Matte Surface Window */
+.glass-modal {
+  background: #121217;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 32px 80px -16px rgba(0, 0, 0, 0.98),
+    0 0 50px rgba(0, 0, 0, 0.8);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================
+   FLUID MICRO-INTERACTION ANIMATIONS
+   ========================================================== */
+
+@keyframes modalSpring {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(16px);
+  }
+  60% {
+    transform: scale(1.01) translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes viewFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes launchGlow {
+  0%, 100% {
+    box-shadow: 
+      0 10px 30px rgba(255, 255, 255, 0.30),
+      0 4px 16px rgba(0, 0, 0, 0.5),
+      0 0 20px rgba(168, 85, 247, 0.30),
+      inset 0 1px 2px rgba(255, 255, 255, 1);
+  }
+  50% {
+    box-shadow: 
+      0 14px 40px rgba(255, 255, 255, 0.45),
+      0 6px 20px rgba(0, 0, 0, 0.5),
+      0 0 32px rgba(192, 132, 252, 0.45),
+      inset 0 1px 2px rgba(255, 255, 255, 1);
+  }
+}
+
+.animate-modal-spring {
+  animation: modalSpring 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-view-fade-in {
+  animation: viewFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-launch-glow {
+  animation: launchGlow 3.5s ease-in-out infinite;
+}
+
+/* The Signature White LAUNCH Button */
+.glass-launch-btn {
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 
+    0 10px 30px rgba(255, 255, 255, 0.35),
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(168, 85, 247, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 1);
+  color: #08080a;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-launch-btn:hover {
+  background: #ffffff;
+  box-shadow: 
+    0 14px 42px rgba(255, 255, 255, 0.5),
+    0 0 40px rgba(192, 132, 252, 0.6),
+    inset 0 1px 3px rgba(255, 255, 255, 1);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.glass-launch-btn:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.3);
+}
+
+/* Specs Pill (Bottom of Featured Instance Card) */
+.glass-specs-pill {
+  background: #0e0e13;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 10px 25px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* Tall Player Card (Glassmorphic Frosted Blur behind Opaque 3D Model) */
+.glass-player-card {
+  background: rgba(12, 12, 18, 0.38);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 
+    0 20px 50px rgba(0, 0, 0, 0.65),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.25),
+    inset 0 0 24px rgba(255, 255, 255, 0.02);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-player-card:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow: 
+    0 24px 60px rgba(0, 0, 0, 0.75),
+    inset 0 1px 2px rgba(255, 255, 255, 0.35),
+    inset 0 0 28px rgba(168, 85, 247, 0.10);
+}
+
+/* Signature Purple Sidebar Container from Screenshots */
+.glass-sidebar-container {
+  background: linear-gradient(180deg, #7c3aed 0%, #6d28d9 50%, #4c1d95 100%);
+  border: 1px solid rgba(216, 180, 254, 0.3);
+  box-shadow: 
+    0 0 25px rgba(124, 58, 237, 0.3),
+    0 12px 30px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Black Capsule Button inside Purple Sidebar (Symbols only) */
+.glass-sidebar-btn {
+  background: #08080a;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: all 0.20s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-sidebar-btn:hover {
+  background: #14141a;
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.06);
+}
+
+.glass-sidebar-btn.active {
+  background: #ffffff;
+  color: #000000;
+  border: 1.5px solid #ffffff;
+  box-shadow: 
+    0 0 20px rgba(255, 255, 255, 0.5),
+    0 6px 18px rgba(0, 0, 0, 0.8);
+  transform: scale(1.08);
+}
+
+/* Segmented Action Bar at bottom of Instance Cards */
+.instance-action-bar {
+  background: #0b0b0e;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Window dragging */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a855f7;
+}
