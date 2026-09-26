@@ -51,13 +51,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       <div className="relative flex flex-col items-center z-10 max-w-sm w-full px-6">
         {/* Animated Brand Emblem */}
         <div className="relative w-24 h-24 mb-6 flex items-center justify-center">
-          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-secondary)] opacity-80 blur-lg animate-pulse" />
-          <div className="relative w-full h-full rounded-2xl bg-[#0f111c] border border-[var(--color-border-hover)] flex items-center justify-center shadow-2xl overflow-hidden">
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-secondary)] opacity-60 blur-xl animate-pulse" />
+          <div className="relative w-full h-full rounded-2xl bg-[#0f111c]/90 border border-white/10 flex items-center justify-center shadow-2xl overflow-hidden p-3">
             {/* Gloss highlight */}
             <div className="absolute -top-10 -left-10 w-24 h-24 bg-white/10 rounded-full blur-md" />
-            <span className="font-display font-black text-4xl tracking-tighter bg-clip-text text-transparent bg-gradient-to-br from-white via-[var(--color-primary-light)] to-[var(--color-primary)]">
-              VC
-            </span>
+            <img src="./icon.png" alt="VictusClient Logo" className="w-16 h-16 object-contain relative z-10 drop-shadow-[0_0_16px_rgba(168,85,247,0.5)]" />
           </div>
         </div>
 

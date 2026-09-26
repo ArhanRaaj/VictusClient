@@ -40,19 +40,17 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
     <header className="h-11 w-full flex items-center justify-between px-5 select-none drag-region bg-[#0a0a0e]/95 backdrop-blur-xl border-b border-white/[0.07] relative z-50">
       {/* Left: Sleek Brand Mark with Coordinated Accent Glow */}
       <div className="flex items-center space-x-2.5 no-drag">
-        <div
-          className="w-2.5 h-2.5 rounded-full transition-all duration-300"
-          style={{
-            backgroundColor: accentColor,
-            boxShadow: `0 0 10px ${accentColor}`,
-          }}
+        <img
+          src="./icon.png"
+          alt="VictusClient"
+          className="w-5 h-5 object-contain transition-transform duration-200 hover:scale-110 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]"
         />
         <div className="flex items-center space-x-1.5">
           <span className="font-display font-black text-xs tracking-[0.2em] uppercase text-white">
             Victus<span style={{ color: accentColor }}>Client</span>
           </span>
           <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-white/[0.06] text-white/50 border border-white/5">
-            v1.0
+            v1.0.4
           </span>
         </div>
       </div>

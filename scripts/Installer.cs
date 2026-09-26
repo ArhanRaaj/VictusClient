@@ -3,385 +3,649 @@ using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Net;
 using System.Threading;
-using System.Windows.Forms;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Media.Effects;
+using System.Windows.Input;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace VictusClientInstaller
 {
-    static class Program
-    {
-        [DllImport("user32.dll")]
-        private static extern bool SetProcessDPIAware();
-
-        [STAThread]
-        static void Main()
-        {
-            try { SetProcessDPIAware(); } catch {}
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new ModernInstallerForm());
-        }
-    }
-
-    public class ModernProgressBar : Control
-    {
-        private int _value = 0;
-        public int Value
-        {
-            get { return _value; }
-            set
-            {
-                int clamped = Math.Min(100, Math.Max(0, value));
-                if (_value != clamped)
-                {
-                    _value = clamped;
-                    Invalidate();
-                }
-            }
-        }
-
-        public ModernProgressBar()
-        {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            Height = 14;
-        }
-
-        public static GraphicsPath GetRoundedPath(Rectangle rect, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int diameter = radius * 2;
-            Rectangle arc = new Rectangle(rect.X, rect.Y, diameter, diameter);
-
-            path.AddArc(arc, 180, 90);
-            arc.X = rect.Right - diameter;
-            path.AddArc(arc, 270, 90);
-            arc.Y = rect.Bottom - diameter;
-            path.AddArc(arc, 0, 90);
-            arc.X = rect.Left;
-            path.AddArc(arc, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            Rectangle trackRect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath trackPath = GetRoundedPath(trackRect, Height / 2))
-            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(20, 22, 38)))
-            using (Pen borderPen = new Pen(Color.FromArgb(40, 44, 70), 1))
-            {
-                g.FillPath(bgBrush, trackPath);
-                g.DrawPath(borderPen, trackPath);
-            }
-
-            if (_value > 0)
-            {
-                int fillWidth = (int)((Width - 2) * (_value / 100.0));
-                if (fillWidth >= Height - 2)
-                {
-                    Rectangle fillRect = new Rectangle(1, 1, fillWidth, Height - 2);
-                    using (GraphicsPath fillPath = GetRoundedPath(fillRect, (Height - 2) / 2))
-                    using (LinearGradientBrush fillBrush = new LinearGradientBrush(fillRect, Color.FromArgb(6, 182, 212), Color.FromArgb(168, 85, 247), 0f))
-                    {
-                        g.FillPath(fillBrush, fillPath);
-                    }
-                }
-            }
-        }
-    }
-
     public class ModernButton : Button
     {
-        private bool _isHovered = false;
-        private bool _isPressed = false;
+        private Border _border;
+        private TextBlock _textBlock;
+
+        public string ButtonText
+        {
+            get { return _textBlock != null ? _textBlock.Text : ""; }
+            set { if (_textBlock != null) _textBlock.Text = value; }
+        }
 
         public ModernButton()
         {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Cursor = Cursors.Hand;
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold);
-            ForeColor = Color.White;
-            Size = new Size(160, 42);
+            this.Cursor = Cursors.Hand;
+            this.Background = Brushes.Transparent;
+            this.BorderThickness = new Thickness(0);
+
+            // Strip default Windows ButtonChrome
+            FrameworkElementFactory factory = new FrameworkElementFactory(typeof(ContentPresenter));
+            ControlTemplate template = new ControlTemplate(typeof(Button));
+            template.VisualTree = factory;
+            this.Template = template;
+
+            _border = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(22, 11, 22, 11)
+            };
+
+            _textBlock = new TextBlock
+            {
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            _border.Child = _textBlock;
+            this.Content = _border;
+
+            this.MouseEnter += (s, e) => UpdateAppearance();
+            this.MouseLeave += (s, e) => UpdateAppearance();
+            this.IsEnabledChanged += (s, e) => UpdateAppearance();
+            UpdateAppearance();
         }
 
-        protected override void OnMouseEnter(EventArgs e) { _isHovered = true; Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e) { _isHovered = false; _isPressed = false; Invalidate(); }
-        protected override void OnMouseDown(MouseEventArgs mevent) { _isPressed = true; Invalidate(); }
-        protected override void OnMouseUp(MouseEventArgs mevent) { _isPressed = false; Invalidate(); }
-
-        protected override void OnPaint(PaintEventArgs e)
+        public void UpdateAppearance()
         {
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            Rectangle rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath path = ModernProgressBar.GetRoundedPath(rect, 10))
+            if (!this.IsEnabled)
             {
-                if (!Enabled)
-                {
-                    using (SolidBrush disabledBrush = new SolidBrush(Color.FromArgb(30, 32, 48)))
-                    using (Pen disabledPen = new Pen(Color.FromArgb(50, 52, 70)))
-                    {
-                        g.FillPath(disabledBrush, path);
-                        g.DrawPath(disabledPen, path);
-                    }
-                    TextRenderer.DrawText(g, Text, Font, rect, Color.FromArgb(110, 115, 140), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                    return;
-                }
-
-                Color c1 = _isPressed ? Color.FromArgb(2, 132, 199) : (_isHovered ? Color.FromArgb(34, 211, 238) : Color.FromArgb(6, 182, 212));
-                Color c2 = _isPressed ? Color.FromArgb(126, 34, 206) : (_isHovered ? Color.FromArgb(192, 132, 252) : Color.FromArgb(168, 85, 247));
-
-                using (LinearGradientBrush brush = new LinearGradientBrush(rect, c1, c2, 0f))
-                {
-                    g.FillPath(brush, path);
-                }
-
-                TextRenderer.DrawText(g, Text, Font, rect, Color.FromArgb(10, 10, 15), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                _border.Background = new SolidColorBrush(Color.FromRgb(22, 26, 42));
+                _border.BorderBrush = new SolidColorBrush(Color.FromRgb(38, 44, 72));
+                _border.BorderThickness = new Thickness(1);
+                _textBlock.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+                this.Cursor = Cursors.Arrow;
+            }
+            else
+            {
+                this.Cursor = Cursors.Hand;
+                Color c1 = this.IsMouseOver ? Color.FromRgb(34, 211, 238) : Color.FromRgb(6, 182, 212);
+                Color c2 = this.IsMouseOver ? Color.FromRgb(192, 132, 252) : Color.FromRgb(147, 51, 234);
+                _border.Background = new LinearGradientBrush(c1, c2, 0.0);
+                _border.BorderThickness = new Thickness(0);
+                _textBlock.Foreground = new SolidColorBrush(Color.FromRgb(6, 8, 14));
             }
         }
     }
 
-    public class ModernInstallerForm : Form
+    public class WindowControlButton : Button
     {
-        [DllImport("user32.dll")]
-        public static extern bool ReleaseCapture();
-        [DllImport("user32.dll")]
-        public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+        private Border _border;
+        private TextBlock _tb;
+        private Color _hoverColor;
 
-        private const int WM_NCLBUTTONDOWN = 0xA1;
-        private const int HT_CAPTION = 0x2;
-
-        private Label lblStatus;
-        private Label lblPercent;
-        private ModernProgressBar progressBar;
-        private CheckBox chkLaunch;
-        private ModernButton btnAction;
-        private Button btnClose;
-        private Button btnMin;
-        private string installDir;
-
-        public ModernInstallerForm()
+        public WindowControlButton(string symbol, Color hoverColor)
         {
-            this.Text = "VictusClient Setup";
-            this.Size = new Size(620, 420);
-            this.FormBorderStyle = FormBorderStyle.None;
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(11, 12, 20);
-            this.ForeColor = Color.White;
-            this.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
-            this.DoubleBuffered = true;
+            _hoverColor = hoverColor;
+            this.Cursor = Cursors.Hand;
+            this.Background = Brushes.Transparent;
+            this.BorderThickness = new Thickness(0);
+            this.Width = 34;
+            this.Height = 28;
+
+            FrameworkElementFactory factory = new FrameworkElementFactory(typeof(ContentPresenter));
+            ControlTemplate template = new ControlTemplate(typeof(Button));
+            template.VisualTree = factory;
+            this.Template = template;
+
+            _border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Background = Brushes.Transparent
+            };
+
+            _tb = new TextBlock
+            {
+                Text = symbol,
+                FontSize = 11,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            _border.Child = _tb;
+            this.Content = _border;
+
+            this.MouseEnter += (s, e) =>
+            {
+                _border.Background = new SolidColorBrush(_hoverColor);
+                _tb.Foreground = Brushes.White;
+            };
+
+            this.MouseLeave += (s, e) =>
+            {
+                _border.Background = Brushes.Transparent;
+                _tb.Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184));
+            };
+        }
+    }
+
+    public class ModernCheckBox : StackPanel
+    {
+        private Border _box;
+        private TextBlock _check;
+        private bool _isChecked = true;
+
+        public bool IsChecked
+        {
+            get { return _isChecked; }
+            set { _isChecked = value; UpdateCheck(); }
+        }
+
+        public ModernCheckBox(string labelText)
+        {
+            this.Orientation = Orientation.Horizontal;
+            this.Cursor = Cursors.Hand;
+            this.VerticalAlignment = VerticalAlignment.Center;
+
+            _box = new Border
+            {
+                Width = 18,
+                Height = 18,
+                CornerRadius = new CornerRadius(5),
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 9, 0)
+            };
+
+            _check = new TextBlock
+            {
+                Text = "\u2713",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(6, 8, 14)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _box.Child = _check;
+
+            TextBlock label = new TextBlock
+            {
+                Text = labelText,
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            this.Children.Add(_box);
+            this.Children.Add(label);
+
+            this.MouseLeftButtonDown += (s, e) =>
+            {
+                IsChecked = !IsChecked;
+            };
+
+            UpdateCheck();
+        }
+
+        private void UpdateCheck()
+        {
+            if (_isChecked)
+            {
+                _box.Background = new SolidColorBrush(Color.FromRgb(6, 182, 212));
+                _box.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 211, 238));
+                _check.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                _box.Background = new SolidColorBrush(Color.FromRgb(20, 24, 40));
+                _box.BorderBrush = new SolidColorBrush(Color.FromRgb(45, 52, 80));
+                _check.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    public class ModernInstallerWindow : Window
+    {
+        public TextBlock lblStatus;
+        public TextBlock lblPercent;
+        public Border progressTrack;
+        public Border progressFill;
+        public ModernCheckBox chkLaunch;
+        public ModernButton btnAction;
+        private string installDir;
+        private int _currentPct = 0;
+        private BitmapImage appLogoBmp = null;
+
+        public ModernInstallerWindow()
+        {
+            this.Title = "VictusClient Setup";
+            this.Width = 660;
+            this.Height = 440;
+            this.WindowStyle = WindowStyle.None;
+            this.AllowsTransparency = true;
+            this.Background = Brushes.Transparent;
+            this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
             installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "VictusClient");
 
-            this.MouseDown += OnFormMouseDown;
-
+            LoadLogo();
             InitializeLayout();
             StartInstallation();
         }
 
-        private void OnFormMouseDown(object sender, MouseEventArgs e)
+        private void LoadLogo()
         {
-            if (e.Button == MouseButtons.Left)
+            try
             {
-                ReleaseCapture();
-                SendMessage(this.Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
+                using (Stream iconStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("AppIcon"))
+                {
+                    if (iconStream != null)
+                    {
+                        appLogoBmp = new BitmapImage();
+                        appLogoBmp.BeginInit();
+                        appLogoBmp.StreamSource = iconStream;
+                        appLogoBmp.CacheOption = BitmapCacheOption.OnLoad;
+                        appLogoBmp.EndInit();
+                        this.Icon = appLogoBmp;
+                    }
+                }
             }
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            // Gradient Top Accent Line (3px)
-            using (LinearGradientBrush topGlow = new LinearGradientBrush(new Rectangle(0, 0, Width, 3), Color.FromArgb(6, 182, 212), Color.FromArgb(168, 85, 247), 0f))
-            {
-                g.FillRectangle(topGlow, 0, 0, Width, 3);
-            }
-
-            // Outer 1px Subtle Border
-            using (Pen borderPen = new Pen(Color.FromArgb(40, 44, 68), 1))
-            {
-                g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
-            }
+            catch {}
         }
 
         private void InitializeLayout()
         {
-            // Title Bar Controls
-            Label lblAppIcon = new Label();
-            lblAppIcon.Text = "⚡";
-            lblAppIcon.Font = new Font("Segoe UI Emoji", 11F, FontStyle.Bold);
-            lblAppIcon.ForeColor = Color.FromArgb(6, 182, 212);
-            lblAppIcon.Location = new Point(22, 14);
-            lblAppIcon.AutoSize = true;
-            lblAppIcon.MouseDown += OnFormMouseDown;
-            this.Controls.Add(lblAppIcon);
-
-            Label lblAppTitle = new Label();
-            lblAppTitle.Text = "VictusClient Setup";
-            lblAppTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            lblAppTitle.ForeColor = Color.FromArgb(200, 205, 225);
-            lblAppTitle.Location = new Point(44, 16);
-            lblAppTitle.AutoSize = true;
-            lblAppTitle.MouseDown += OnFormMouseDown;
-            this.Controls.Add(lblAppTitle);
-
-            // Minimize Button
-            btnMin = new Button();
-            btnMin.Text = "─";
-            btnMin.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            btnMin.ForeColor = Color.FromArgb(140, 145, 170);
-            btnMin.BackColor = Color.Transparent;
-            btnMin.FlatStyle = FlatStyle.Flat;
-            btnMin.FlatAppearance.BorderSize = 0;
-            btnMin.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 32, 50);
-            btnMin.Size = new Size(32, 26);
-            btnMin.Location = new Point(Width - 76, 6);
-            btnMin.Cursor = Cursors.Hand;
-            btnMin.Click += (s, e) => this.WindowState = FormWindowState.Minimized;
-            this.Controls.Add(btnMin);
-
-            // Close Button
-            btnClose = new Button();
-            btnClose.Text = "✕";
-            btnClose.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            btnClose.ForeColor = Color.FromArgb(140, 145, 170);
-            btnClose.BackColor = Color.Transparent;
-            btnClose.FlatStyle = FlatStyle.Flat;
-            btnClose.FlatAppearance.BorderSize = 0;
-            btnClose.FlatAppearance.MouseOverBackColor = Color.FromArgb(225, 29, 72);
-            btnClose.Size = new Size(32, 26);
-            btnClose.Location = new Point(Width - 42, 6);
-            btnClose.Cursor = Cursors.Hand;
-            btnClose.Click += (s, e) => Application.Exit();
-            this.Controls.Add(btnClose);
-
-            // Hero Branding
-            Label lblHero = new Label();
-            lblHero.Text = "VICTUS CLIENT";
-            lblHero.Font = new Font("Segoe UI", 22F, FontStyle.Bold);
-            lblHero.ForeColor = Color.White;
-            lblHero.Location = new Point(36, 52);
-            lblHero.AutoSize = true;
-            this.Controls.Add(lblHero);
-
-            Label lblBadge = new Label();
-            lblBadge.Text = "v1.0.2 • Fast Setup";
-            lblBadge.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            lblBadge.ForeColor = Color.FromArgb(34, 211, 238);
-            lblBadge.BackColor = Color.FromArgb(20, 45, 65);
-            lblBadge.Padding = new Padding(6, 2, 6, 2);
-            lblBadge.Location = new Point(285, 60);
-            lblBadge.AutoSize = true;
-            this.Controls.Add(lblBadge);
-
-            Label lblSubtitle = new Label();
-            lblSubtitle.Text = "Next-Generation Minecraft Launcher, High-FPS Engine & Cloud Multiplayer";
-            lblSubtitle.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular);
-            lblSubtitle.ForeColor = Color.FromArgb(167, 139, 250);
-            lblSubtitle.Location = new Point(38, 96);
-            lblSubtitle.AutoSize = true;
-            this.Controls.Add(lblSubtitle);
-
-            // Feature Highlights Deck (3 Cards)
-            int cardW = 168;
-            int cardH = 82;
-            int cardY = 135;
-
-            Panel card1 = CreateFeatureCard("⚡ Ultra FPS Engine", "Zero-lag Fabric/Forge launch with smart memory allocation", 36, cardY, cardW, cardH);
-            Panel card2 = CreateFeatureCard("☁️ Free Cloud Servers", "Instant 24/7 world multiplayer with 1-click cloud wake", 36 + cardW + 16, cardY, cardW, cardH);
-            Panel card3 = CreateFeatureCard("🎨 Shaders & Mods", "Integrated Modrinth content browser & visual customization", 36 + (cardW + 16) * 2, cardY, cardW, cardH);
-
-            this.Controls.Add(card1);
-            this.Controls.Add(card2);
-            this.Controls.Add(card3);
-
-            // Progress Section
-            lblStatus = new Label();
-            lblStatus.Text = "Preparing installation...";
-            lblStatus.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular);
-            lblStatus.ForeColor = Color.FromArgb(203, 213, 225);
-            lblStatus.Location = new Point(36, 245);
-            lblStatus.Size = new Size(440, 20);
-            this.Controls.Add(lblStatus);
-
-            lblPercent = new Label();
-            lblPercent.Text = "0%";
-            lblPercent.Font = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-            lblPercent.ForeColor = Color.FromArgb(34, 211, 238);
-            lblPercent.Location = new Point(510, 245);
-            lblPercent.Size = new Size(74, 20);
-            lblPercent.TextAlign = ContentAlignment.TopRight;
-            this.Controls.Add(lblPercent);
-
-            progressBar = new ModernProgressBar();
-            progressBar.Location = new Point(36, 272);
-            progressBar.Size = new Size(548, 14);
-            progressBar.Value = 0;
-            this.Controls.Add(progressBar);
-
-            // Bottom Actions Section
-            chkLaunch = new CheckBox();
-            chkLaunch.Text = "Launch VictusClient after installation completes";
-            chkLaunch.Font = new Font("Segoe UI", 9.5F, FontStyle.Regular);
-            chkLaunch.ForeColor = Color.FromArgb(203, 213, 225);
-            chkLaunch.Checked = true;
-            chkLaunch.Location = new Point(38, 335);
-            chkLaunch.AutoSize = true;
-            this.Controls.Add(chkLaunch);
-
-            btnAction = new ModernButton();
-            btnAction.Text = "Installing...";
-            btnAction.Location = new Point(424, 330);
-            btnAction.Size = new Size(160, 42);
-            btnAction.Enabled = false;
-            btnAction.Click += BtnAction_Click;
-            this.Controls.Add(btnAction);
-        }
-
-        private Panel CreateFeatureCard(string title, string desc, int x, int y, int w, int h)
-        {
-            Panel p = new Panel();
-            p.Location = new Point(x, y);
-            p.Size = new Size(w, h);
-            p.BackColor = Color.FromArgb(17, 19, 32);
-
-            p.Paint += (s, pe) =>
+            Grid rootGrid = new Grid
             {
-                using (Pen pen = new Pen(Color.FromArgb(35, 38, 62), 1))
-                {
-                    pe.Graphics.DrawRectangle(pen, 0, 0, w - 1, h - 1);
-                }
+                Margin = new Thickness(12)
             };
 
-            Label lblT = new Label();
-            lblT.Text = title;
-            lblT.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-            lblT.ForeColor = Color.White;
-            lblT.Location = new Point(8, 8);
-            lblT.AutoSize = true;
-            p.Controls.Add(lblT);
+            Border cardBorder = new Border
+            {
+                CornerRadius = new CornerRadius(14),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(36, 42, 68)),
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(12, 14, 24),
+                    Color.FromRgb(8, 9, 16),
+                    90.0
+                ),
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 24,
+                    ShadowDepth = 6,
+                    Opacity = 0.85
+                },
+                ClipToBounds = true
+            };
 
-            Label lblD = new Label();
-            lblD.Text = desc;
-            lblD.Font = new Font("Segoe UI", 8F, FontStyle.Regular);
-            lblD.ForeColor = Color.FromArgb(148, 163, 184);
-            lblD.Location = new Point(8, 28);
-            lblD.Size = new Size(w - 16, 48);
-            p.Controls.Add(lblD);
+            Grid mainGrid = new Grid();
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Accent line
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Title bar
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Hero header
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Feature cards
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Progress section
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Action deck
 
-            return p;
+            // Top gradient accent line (3px)
+            Border topAccent = new Border
+            {
+                Height = 3,
+                Background = new LinearGradientBrush(
+                    new GradientStopCollection
+                    {
+                        new GradientStop(Color.FromRgb(6, 182, 212), 0.0),
+                        new GradientStop(Color.FromRgb(139, 92, 246), 0.5),
+                        new GradientStop(Color.FromRgb(236, 72, 153), 1.0)
+                    },
+                    0.0
+                )
+            };
+            Grid.SetRow(topAccent, 0);
+            mainGrid.Children.Add(topAccent);
+
+            // Row 1: Title Bar
+            Grid titleBar = new Grid
+            {
+                Height = 42,
+                Margin = new Thickness(18, 4, 14, 0),
+                Background = Brushes.Transparent
+            };
+            titleBar.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+            };
+
+            StackPanel titleLeft = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (appLogoBmp != null)
+            {
+                Image iconImg = new Image
+                {
+                    Source = appLogoBmp,
+                    Width = 20,
+                    Height = 20,
+                    Margin = new Thickness(0, 0, 9, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                titleLeft.Children.Add(iconImg);
+            }
+            else
+            {
+                TextBlock bolt = new TextBlock
+                {
+                    Text = "\u26A1",
+                    FontSize = 14,
+                    Foreground = new SolidColorBrush(Color.FromRgb(6, 182, 212)),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                titleLeft.Children.Add(bolt);
+            }
+
+            TextBlock winTitle = new TextBlock
+            {
+                Text = "VictusClient Setup",
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            titleLeft.Children.Add(winTitle);
+
+            Border badge = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(16, 38, 62)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(2, 132, 199)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(9),
+                Padding = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(12, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            badge.Child = new TextBlock
+            {
+                Text = "v1.0.4 \u2022 Official",
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
+            };
+            titleLeft.Children.Add(badge);
+
+            titleBar.Children.Add(titleLeft);
+
+            // Window Controls (Right)
+            StackPanel controlsRight = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            WindowControlButton btnMin = new WindowControlButton("─", Color.FromRgb(30, 41, 59));
+            btnMin.Click += (s, e) => this.WindowState = WindowState.Minimized;
+            controlsRight.Children.Add(btnMin);
+
+            WindowControlButton btnClose = new WindowControlButton("✕", Color.FromRgb(225, 29, 72));
+            btnClose.Click += (s, e) => Application.Current.Shutdown();
+            controlsRight.Children.Add(btnClose);
+
+            titleBar.Children.Add(controlsRight);
+
+            Grid.SetRow(titleBar, 1);
+            mainGrid.Children.Add(titleBar);
+
+            // Row 2: Hero Header with 3D Ribbon Logo Emblem
+            StackPanel heroPanel = new StackPanel
+            {
+                Margin = new Thickness(24, 6, 24, 14)
+            };
+
+            StackPanel heroRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (appLogoBmp != null)
+            {
+                Border logoContainer = new Border
+                {
+                    Width = 52,
+                    Height = 52,
+                    CornerRadius = new CornerRadius(12),
+                    Background = new SolidColorBrush(Color.FromArgb(180, 16, 19, 36)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(45, 54, 88)),
+                    BorderThickness = new Thickness(1),
+                    Margin = new Thickness(0, 0, 14, 0),
+                    Padding = new Thickness(6),
+                    Effect = new DropShadowEffect
+                    {
+                        Color = Color.FromRgb(147, 51, 234),
+                        BlurRadius = 18,
+                        ShadowDepth = 0,
+                        Opacity = 0.55
+                    }
+                };
+
+                Image heroLogo = new Image
+                {
+                    Source = appLogoBmp,
+                    Stretch = Stretch.Uniform
+                };
+                logoContainer.Child = heroLogo;
+                heroRow.Children.Add(logoContainer);
+            }
+
+            StackPanel heroTextStack = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            TextBlock heroTitle = new TextBlock
+            {
+                Text = "VICTUS CLIENT",
+                FontSize = 24,
+                FontWeight = FontWeights.ExtraBold,
+                Foreground = Brushes.White
+            };
+            heroTextStack.Children.Add(heroTitle);
+
+            TextBlock heroSubtitle = new TextBlock
+            {
+                Text = "Next-Generation Minecraft Launcher \u2022 High-FPS Engine & Cloud Multiplayer",
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(167, 139, 250)),
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            heroTextStack.Children.Add(heroSubtitle);
+
+            heroRow.Children.Add(heroTextStack);
+            heroPanel.Children.Add(heroRow);
+
+            Grid.SetRow(heroPanel, 2);
+            mainGrid.Children.Add(heroPanel);
+
+            // Row 3: Feature Highlights (3 Cards)
+            Grid cardsGrid = new Grid
+            {
+                Margin = new Thickness(24, 0, 24, 18)
+            };
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14, GridUnitType.Pixel) });
+            cardsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            Border card1 = CreateFeatureCard("\u26A1", Color.FromRgb(34, 211, 238), "Ultra FPS Engine", "Zero-lag Fabric & Forge with intelligent auto-tuning JVM memory allocation");
+            Grid.SetColumn(card1, 0);
+            cardsGrid.Children.Add(card1);
+
+            Border card2 = CreateFeatureCard("\u2601", Color.FromRgb(192, 132, 252), "Free Cloud Servers", "Instant 24/7 world multiplayer with 1-click cloud wake & direct connect");
+            Grid.SetColumn(card2, 2);
+            cardsGrid.Children.Add(card2);
+
+            Border card3 = CreateFeatureCard("\u2728", Color.FromRgb(244, 63, 94), "Shaders & Mods", "Integrated Modrinth browser for instant 1-click shaders, mods & resource packs");
+            Grid.SetColumn(card3, 4);
+            cardsGrid.Children.Add(card3);
+
+            Grid.SetRow(cardsGrid, 3);
+            mainGrid.Children.Add(cardsGrid);
+
+            // Row 4: Progress Section
+            StackPanel progressPanel = new StackPanel
+            {
+                Margin = new Thickness(24, 0, 24, 18)
+            };
+
+            Grid progressInfo = new Grid
+            {
+                Margin = new Thickness(0, 0, 0, 7)
+            };
+            lblStatus = new TextBlock
+            {
+                Text = "Preparing installation...",
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            progressInfo.Children.Add(lblStatus);
+
+            lblPercent = new TextBlock
+            {
+                Text = "0%",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248)),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+            progressInfo.Children.Add(lblPercent);
+
+            progressPanel.Children.Add(progressInfo);
+
+            progressTrack = new Border
+            {
+                Height = 10,
+                CornerRadius = new CornerRadius(5),
+                Background = new SolidColorBrush(Color.FromRgb(18, 22, 38)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(36, 42, 70)),
+                BorderThickness = new Thickness(1),
+                ClipToBounds = true
+            };
+
+            progressFill = new Border
+            {
+                Height = 10,
+                CornerRadius = new CornerRadius(5),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Width = 0,
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(6, 182, 212),
+                    Color.FromRgb(168, 85, 247),
+                    0.0
+                )
+            };
+            progressTrack.Child = progressFill;
+
+            progressTrack.SizeChanged += (s, e) =>
+            {
+                UpdateFillWidth(_currentPct);
+            };
+
+            progressPanel.Children.Add(progressTrack);
+
+            Grid.SetRow(progressPanel, 4);
+            mainGrid.Children.Add(progressPanel);
+
+            // Row 5: Action Deck
+            Grid actionDeck = new Grid
+            {
+                Margin = new Thickness(24, 4, 24, 20)
+            };
+
+            chkLaunch = new ModernCheckBox("Launch VictusClient after installation completes");
+            chkLaunch.HorizontalAlignment = HorizontalAlignment.Left;
+            actionDeck.Children.Add(chkLaunch);
+
+            btnAction = new ModernButton
+            {
+                ButtonText = "Installing...",
+                IsEnabled = false,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Width = 194,
+                Height = 42
+            };
+            btnAction.Click += BtnAction_Click;
+            actionDeck.Children.Add(btnAction);
+
+            Grid.SetRow(actionDeck, 5);
+            mainGrid.Children.Add(actionDeck);
+
+            cardBorder.Child = mainGrid;
+            rootGrid.Children.Add(cardBorder);
+            this.Content = rootGrid;
+        }
+
+        private Border CreateFeatureCard(string icon, Color iconColor, string title, string desc)
+        {
+            Border card = new Border
+            {
+                Height = 92,
+                Background = new SolidColorBrush(Color.FromRgb(16, 19, 34)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(34, 40, 68)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 10, 12, 10)
+            };
+
+            StackPanel sp = new StackPanel();
+
+            StackPanel headerSp = new StackPanel { Orientation = Orientation.Horizontal };
+            TextBlock iconTb = new TextBlock
+            {
+                Text = icon + " ",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(iconColor),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            TextBlock titleTb = new TextBlock
+            {
+                Text = title,
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            headerSp.Children.Add(iconTb);
+            headerSp.Children.Add(titleTb);
+            sp.Children.Add(headerSp);
+
+            TextBlock descTb = new TextBlock
+            {
+                Text = desc,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 6, 0, 0),
+                LineHeight = 14
+            };
+            sp.Children.Add(descTb);
+
+            card.Child = sp;
+            return card;
         }
 
         private void StartInstallation()
@@ -395,8 +659,8 @@ namespace VictusClientInstaller
         {
             try
             {
-                UpdateProgress(5, "Verifying environment...");
-                Thread.Sleep(300);
+                UpdateProgress(5, "Verifying installation environment...");
+                Thread.Sleep(250);
 
                 if (!Directory.Exists(installDir))
                 {
@@ -405,9 +669,7 @@ namespace VictusClientInstaller
 
                 Assembly asm = Assembly.GetExecutingAssembly();
                 string exePath = Path.Combine(installDir, "VictusClient.exe");
-                string asarPath = Path.Combine(installDir, "resources", "app.asar");
 
-                // Check for embedded AppPackage (full distribution) or AppAsar (compact package)
                 bool hasEmbeddedPackage = false;
 
                 using (Stream stream = asm.GetManifestResourceStream("AppPackage"))
@@ -427,7 +689,7 @@ namespace VictusClientInstaller
                         if (asarStream != null)
                         {
                             hasEmbeddedPackage = true;
-                            UpdateProgress(25, "Deploying core client package...");
+                            UpdateProgress(25, "Deploying core client package (app.asar)...");
                             string resDir = Path.Combine(installDir, "resources");
                             if (!Directory.Exists(resDir)) Directory.CreateDirectory(resDir);
                             ExtractZipStream(asarStream, resDir, 25, 75);
@@ -435,11 +697,11 @@ namespace VictusClientInstaller
                     }
                 }
 
-                // If runtime is missing on fresh machine, download latest release payload
+                // If runtime binary is missing on fresh machine, download latest release payload
                 if (!File.Exists(exePath))
                 {
-                    UpdateProgress(25, "Fetching latest VictusClient release from GitHub...");
-                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup-1.0.2.exe";
+                    UpdateProgress(25, "Fetching latest VictusClient runtime from GitHub...");
+                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup-1.0.4.exe";
                     string tempExe = Path.Combine(Path.GetTempPath(), "VictusClient-Setup-Online.exe");
 
                     DownloadFileWithProgress(downloadUrl, tempExe, 25, 80);
@@ -457,22 +719,24 @@ namespace VictusClientInstaller
                 RegisterUninstall();
 
                 UpdateProgress(100, "Installation complete! Ready to launch.");
-                this.Invoke((MethodInvoker)delegate
+                this.Dispatcher.Invoke((Action)delegate
                 {
                     lblStatus.Text = "VictusClient is installed and ready to play.";
-                    lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
-                    btnAction.Text = "Finish & Launch ➔";
-                    btnAction.Enabled = true;
+                    lblStatus.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
+                    btnAction.ButtonText = "Finish & Launch \u2794";
+                    btnAction.IsEnabled = true;
                 });
             }
             catch (Exception ex)
             {
-                this.Invoke((MethodInvoker)delegate
+                this.Dispatcher.Invoke((Action)delegate
                 {
                     lblStatus.Text = "Notice: " + ex.Message;
-                    lblStatus.ForeColor = Color.FromArgb(244, 63, 94);
-                    btnAction.Text = "Close";
-                    btnAction.Enabled = true;
+                    lblStatus.Foreground = new SolidColorBrush(Color.FromRgb(244, 63, 94));
+                    btnAction.ButtonText = "Close";
+                    btnAction.IsEnabled = true;
+                    btnAction.Click -= BtnAction_Click;
+                    btnAction.Click += (s, ev) => Application.Current.Shutdown();
                 });
             }
         }
@@ -526,15 +790,25 @@ namespace VictusClientInstaller
             }
         }
 
+        private void UpdateFillWidth(int value)
+        {
+            if (progressTrack == null || progressFill == null) return;
+            double trackW = progressTrack.ActualWidth;
+            if (trackW <= 0) trackW = 588;
+            progressFill.Width = Math.Max(0, Math.Min(trackW, (value / 100.0) * trackW));
+        }
+
         private void UpdateProgress(int value, string text)
         {
-            if (this.IsDisposed || !this.IsHandleCreated) return;
-            this.BeginInvoke((MethodInvoker)delegate
+            _currentPct = value;
+            if (!this.Dispatcher.CheckAccess())
             {
-                progressBar.Value = value;
-                lblPercent.Text = value + "%";
-                lblStatus.Text = text;
-            });
+                this.Dispatcher.BeginInvoke((Action)delegate { UpdateProgress(value, text); });
+                return;
+            }
+            UpdateFillWidth(value);
+            lblPercent.Text = value + "%";
+            lblStatus.Text = text;
         }
 
         private void CreateShortcuts()
@@ -580,7 +854,7 @@ namespace VictusClientInstaller
                     {
                         string exePath = Path.Combine(installDir, "VictusClient.exe");
                         key.SetValue("DisplayName", "VictusClient");
-                        key.SetValue("DisplayVersion", "1.0.2");
+                        key.SetValue("DisplayVersion", "1.0.4");
                         key.SetValue("Publisher", "VictusClient Team");
                         key.SetValue("InstallLocation", installDir);
                         key.SetValue("DisplayIcon", exePath);
@@ -591,17 +865,74 @@ namespace VictusClientInstaller
             catch {}
         }
 
-        private void BtnAction_Click(object sender, EventArgs e)
+        private void BtnAction_Click(object sender, RoutedEventArgs e)
         {
-            if (chkLaunch.Checked)
+            if (!btnAction.IsEnabled) return;
+
+            if (chkLaunch.IsChecked)
             {
-                string exePath = Path.Combine(installDir, "VictusClient.exe");
-                if (File.Exists(exePath))
+                try
                 {
-                    Process.Start(new ProcessStartInfo(exePath) { WorkingDirectory = installDir });
+                    // Kill any background / orphaned VictusClient processes
+                    foreach (Process p in Process.GetProcessesByName("VictusClient"))
+                    {
+                        try
+                        {
+                            p.Kill();
+                            p.WaitForExit(1000);
+                        }
+                        catch {}
+                    }
+
+                    string exePath = Path.Combine(installDir, "VictusClient.exe");
+                    if (File.Exists(exePath))
+                    {
+                        ProcessStartInfo psi = new ProcessStartInfo(exePath)
+                        {
+                            WorkingDirectory = installDir,
+                            UseShellExecute = true
+                        };
+                        Process.Start(psi);
+                    }
+                    else
+                    {
+                        string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                        string lnk = Path.Combine(desktop, "VictusClient.lnk");
+                        if (File.Exists(lnk))
+                        {
+                            Process.Start(new ProcessStartInfo(lnk) { UseShellExecute = true });
+                        }
+                        else if (Directory.Exists(installDir))
+                        {
+                            Process.Start(new ProcessStartInfo(installDir) { UseShellExecute = true });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Launch notice: " + ex.Message, "VictusClient", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
-            Application.Exit();
+
+            try
+            {
+                Application.Current.Shutdown();
+            }
+            catch
+            {
+                Environment.Exit(0);
+            }
+        }
+    }
+
+    public class Program
+    {
+        [STAThread]
+        public static void Main()
+        {
+            Application app = new Application();
+            ModernInstallerWindow win = new ModernInstallerWindow();
+            app.Run(win);
         }
     }
 }
