@@ -75,6 +75,7 @@ export class MicrosoftAuthManager {
               const account = await this.exchangeCodeForMinecraft(code);
               resolve({ success: true, account });
             } catch (err: any) {
+              console.error('[MicrosoftAuth] Exchange error:', err);
               resolve({ success: false, error: err.message || 'Failed to authenticate with Minecraft services' });
             }
           } else if (error && !isResolved) {
@@ -112,6 +113,7 @@ export class MicrosoftAuthManager {
    * Exchanges authorization code through Microsoft -> XBL -> XSTS -> Minecraft Services
    */
   private async exchangeCodeForMinecraft(code: string): Promise<MicrosoftAccount> {
+    console.log('[MicrosoftAuth] 1. Exchanging code for MSA access token...');
     // 1. Exchange OAuth code for Microsoft Live token
     const msTokenData = await this.postForm('https://login.live.com/oauth20_token.srf', {
       client_id: this.clientId,
@@ -121,73 +123,91 @@ export class MicrosoftAuthManager {
       scope: this.scope,
     });
 
-    if (!msTokenData.access_token) {
-      throw new Error(msTokenData.error_description || 'Failed to acquire Microsoft OAuth token');
+    if (!msTokenData || !msTokenData.access_token) {
+      throw new Error(msTokenData?.error_description || 'Failed to acquire Microsoft OAuth token');
     }
 
     const msAccessToken = msTokenData.access_token;
     const refreshToken = msTokenData.refresh_token;
 
-    // 2. Authenticate with Xbox Live
-    const xblData = await this.postJson('https://user.auth.xboxlive.com/user/authenticate', {
-      Properties: {
-        AuthMethod: 'RPS',
-        SiteName: 'user.auth.xboxlive.com',
-        RpsTicket: `d=${msAccessToken}`,
-      },
-      RelyingParty: 'http://auth.xboxlive.com',
-      TokenType: 'JWT',
-    });
+    console.log('[MicrosoftAuth] 2. Authenticating with Xbox Live (user.auth.xboxlive.com)...');
+    // 2. Authenticate with Xbox Live - try with d= prefix first
+    let xblData = await this.callXboxAuthenticate(msAccessToken, true);
 
-    if (!xblData.Token || !xblData.DisplayClaims?.xui?.[0]?.uhs) {
-      throw new Error('Failed to authenticate with Xbox Live network');
+    // If needed, try without d= prefix
+    if (!xblData?.Token && (!xblData?.XErr || xblData.XErr === 400)) {
+      console.log('[MicrosoftAuth] Retrying Xbox Live auth without d= prefix...');
+      xblData = await this.callXboxAuthenticate(msAccessToken, false);
+    }
+
+    if (xblData?.XErr) {
+      this.handleXboxError(xblData.XErr);
+    }
+
+    if (!xblData?.Token || !xblData?.DisplayClaims?.xui?.[0]?.uhs) {
+      throw new Error(
+        xblData?.Message ||
+          'Failed to authenticate with Xbox Live network. Please ensure your Microsoft account has an Xbox profile created at xbox.com.'
+      );
     }
 
     const xblToken = xblData.Token;
     const userHash = xblData.DisplayClaims.xui[0].uhs;
 
+    console.log('[MicrosoftAuth] 3. Authorizing XSTS for Minecraft (xsts.auth.xboxlive.com)...');
     // 3. Obtain XSTS Token for Minecraft Services
-    const xstsData = await this.postJson('https://xsts.auth.xboxlive.com/xsts/authorize', {
-      Properties: {
-        SandboxId: 'RETAIL',
-        UserTokens: [xblToken],
+    const xstsData = await this.postJson(
+      'https://xsts.auth.xboxlive.com/xsts/authorize',
+      {
+        Properties: {
+          SandboxId: 'RETAIL',
+          UserTokens: [xblToken],
+        },
+        RelyingParty: 'rp://api.minecraftservices.com/',
+        TokenType: 'JWT',
       },
-      RelyingParty: 'rp://api.minecraftservices.com/',
-      TokenType: 'JWT',
-    });
-
-    if (xstsData.XErr) {
-      if (xstsData.XErr === 2148916233) {
-        throw new Error('This Microsoft account has no Xbox profile. Please visit xbox.com to setup your gamer tag.');
-      } else if (xstsData.XErr === 2148916238) {
-        throw new Error('Child account: A parent or guardian must grant permission to access Minecraft.');
+      {
+        'x-xbl-contract-version': '1',
       }
-      throw new Error(`Xbox XSTS Authorization failed with error code: ${xstsData.XErr}`);
+    );
+
+    if (xstsData?.XErr) {
+      this.handleXboxError(xstsData.XErr);
+    }
+
+    if (!xstsData?.Token) {
+      throw new Error(xstsData?.Message || 'Xbox XSTS authorization failed.');
     }
 
     const xstsToken = xstsData.Token;
 
+    console.log('[MicrosoftAuth] 4. Authenticating with Minecraft Services (api.minecraftservices.com)...');
     // 4. Authenticate with Minecraft Services
     const mcAuthData = await this.postJson('https://api.minecraftservices.com/authentication/login_with_xbox', {
       identityToken: `XBL3.0 x=${userHash};${xstsToken}`,
     });
 
-    if (!mcAuthData.access_token) {
-      throw new Error('Failed to acquire Minecraft access token');
+    if (!mcAuthData?.access_token) {
+      throw new Error(mcAuthData?.errorMessage || 'Failed to acquire Minecraft access token.');
     }
 
     const mcAccessToken = mcAuthData.access_token;
 
+    console.log('[MicrosoftAuth] 5. Fetching Minecraft Game Profile...');
     // 5. Fetch Minecraft Game Profile
     const profile = await this.getJson('https://api.minecraftservices.com/minecraft/profile', mcAccessToken);
 
-    if (!profile.name || !profile.id) {
-      throw new Error('No Minecraft Java Edition profile found. Ensure you own Minecraft and have chosen a username.');
+    if (!profile?.name || !profile?.id) {
+      throw new Error(
+        'No Minecraft Java Edition profile found on this account. Ensure you own Minecraft Java Edition and have set up your player name.'
+      );
     }
 
     const skinUrl =
       profile.skins?.find((s: any) => s.state === 'ACTIVE')?.url ||
       `https://textures.minecraft.net/texture/292009a4925b58f02c77d6d330e88d40f6074e798d24e734ff70a02632e5b697`;
+
+    console.log(`[MicrosoftAuth] Login Success! Welcome @${profile.name}`);
 
     return {
       id: `acc-ms-${profile.id}`,
@@ -203,6 +223,46 @@ export class MicrosoftAuthManager {
       refreshToken,
       expiresAt: Date.now() + (mcAuthData.expires_in || 86400) * 1000,
     };
+  }
+
+  private async callXboxAuthenticate(accessToken: string, withPrefix: boolean): Promise<any> {
+    const ticket = withPrefix ? (accessToken.startsWith('d=') ? accessToken : `d=${accessToken}`) : accessToken;
+
+    return this.postJson(
+      'https://user.auth.xboxlive.com/user/authenticate',
+      {
+        Properties: {
+          AuthMethod: 'RPS',
+          SiteName: 'user.auth.xboxlive.com',
+          RpsTicket: ticket,
+        },
+        RelyingParty: 'http://auth.xboxlive.com',
+        TokenType: 'JWT',
+      },
+      {
+        'x-xbl-contract-version': '1',
+      }
+    );
+  }
+
+  private handleXboxError(errCode: number) {
+    if (errCode === 2148916233) {
+      throw new Error(
+        'This Microsoft account has no Xbox profile. Please visit https://xbox.com, sign in once to create your free Xbox gamer profile, then try again.'
+      );
+    }
+    if (errCode === 2148916238) {
+      throw new Error(
+        'Child account: A parent or guardian in your Microsoft Family must grant permission to access Xbox Live and Minecraft.'
+      );
+    }
+    if (errCode === 2148916235) {
+      throw new Error('Xbox Live is currently unavailable in your account region.');
+    }
+    if (errCode === 2148916236 || errCode === 2148916237) {
+      throw new Error('Adult account verification required by Microsoft before accessing multiplayer.');
+    }
+    throw new Error(`Xbox network error code: ${errCode}`);
   }
 
   // --- HTTP Helpers ---
@@ -241,7 +301,7 @@ export class MicrosoftAuthManager {
     });
   }
 
-  private postJson(urlStr: string, payload: any): Promise<any> {
+  private postJson(urlStr: string, payload: any, customHeaders: Record<string, string> = {}): Promise<any> {
     return new Promise((resolve, reject) => {
       const body = JSON.stringify(payload);
       const url = new URL(urlStr);
@@ -255,6 +315,7 @@ export class MicrosoftAuthManager {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             'Content-Length': Buffer.byteLength(body),
+            ...customHeaders,
           },
         },
         (res) => {
