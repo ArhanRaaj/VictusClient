@@ -29,9 +29,16 @@ export const SettingsView: React.FC = () => {
   >('appearance');
 
   // Auto-updater state
+  const [appVersion, setAppVersion] = useState('1.0.2');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+
+  React.useEffect(() => {
+    window.electronAPI?.getAppVersion?.().then((ver) => {
+      if (ver) setAppVersion(ver);
+    }).catch(() => {});
+  }, []);
 
   // Minecraft settings local state
   const [defaultRam, setDefaultRam] = useState(4096);
@@ -657,7 +664,7 @@ export const SettingsView: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono">
                   <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
                     <span className="text-white/40 block text-[10px] uppercase">Installed Version</span>
-                    <span className="font-bold text-white text-sm">v1.0.0</span>
+                    <span className="font-bold text-white text-sm">v{appVersion}</span>
                   </div>
 
                   <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
@@ -710,7 +717,7 @@ export const SettingsView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                     <span className="text-[var(--color-text-muted)] block text-[10px]">Client Version</span>
-                    <span className="font-bold text-white">1.0.0 "Ascent" (Production)</span>
+                    <span className="font-bold text-white">{appVersion} "Ascent" (Production)</span>
                   </div>
                   <div className="p-3 rounded-xl bg-white/5 border border-white/5">
                     <span className="text-[var(--color-text-muted)] block text-[10px]">Engine</span>
