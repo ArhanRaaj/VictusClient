@@ -7,6 +7,8 @@ import { JavaManager } from './core/JavaManager';
 import { VersionManager } from './core/VersionManager';
 import { MinecraftLauncher } from './core/MinecraftLauncher';
 import { ModrinthManager } from './core/ModrinthManager';
+import { AutoUpdaterManager } from './core/AutoUpdaterManager';
+import { MicrosoftAuthManager } from './core/MicrosoftAuth';
 
 function getOfflinePlayerUuid(username: string): string {
   const hash = crypto.createHash('md5').update('OfflinePlayer:' + username).digest();
@@ -23,6 +25,8 @@ const javaManager = new JavaManager(configManager.getDataDir());
 const versionManager = new VersionManager(configManager.getDataDir());
 const launcher = new MinecraftLauncher(configManager.getDataDir(), versionManager, javaManager);
 const modrinth = new ModrinthManager();
+const autoUpdater = new AutoUpdaterManager();
+const msAuth = new MicrosoftAuthManager();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -66,6 +70,28 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Check for updates shortly after launch
+  setTimeout(async () => {
+    try {
+      const update = await autoUpdater.checkForUpdates();
+      if (update.updateAvailable && mainWindow) {
+        mainWindow.webContents.send('updater-available', update);
+      }
+    } catch (e) {
+      console.warn('[AutoUpdater] Initial check error:', e);
+    }
+  }, 4500);
+
+  // Background periodic update check every 25 minutes
+  setInterval(async () => {
+    try {
+      const update = await autoUpdater.checkForUpdates();
+      if (update.updateAvailable && mainWindow) {
+        mainWindow.webContents.send('updater-available', update);
+      }
+    } catch {}
+  }, 25 * 60 * 1000);
 });
 
 app.on('window-all-closed', () => {
@@ -242,31 +268,21 @@ ipcMain.handle('auth-create-offline', async (_, username) => {
 });
 
 ipcMain.handle('auth-microsoft-login', async () => {
-  // Device code flow initiation
-  try {
-    const res = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: '00000000402b5328', // Standard Minecraft launcher client ID
-        scope: 'service::user.auth.xboxlive.com::MBI_SSL',
-      }),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as any;
-      return {
-        success: true,
-        userCode: data.user_code,
-        verificationUri: data.verification_uri,
-      };
+  const result = await msAuth.loginInteractive(mainWindow);
+  if (result.success && result.account) {
+    const accounts = configManager.loadAccounts().map((a) => ({ ...a, isActive: false }));
+    const existingIndex = accounts.findIndex(
+      (a) => a.id === result.account!.id || a.uuid === result.account!.uuid
+    );
+    if (existingIndex >= 0) {
+      accounts[existingIndex] = result.account;
+    } else {
+      accounts.push(result.account);
     }
-  } catch {}
-
-  return {
-    success: true,
-    userCode: 'VICT-US21',
-    verificationUri: 'https://microsoft.com/link',
-  };
+    configManager.saveAccounts(accounts);
+    return { success: true, account: result.account };
+  }
+  return { success: false, error: result.error || 'Authentication cancelled or failed.' };
 });
 
 // Settings & System IPC
@@ -301,4 +317,23 @@ ipcMain.handle('dialog-select-file', async (_, filters) => {
     ],
   });
   return res.filePaths[0] || null;
+});
+
+// Auto-Updater IPC Handlers
+ipcMain.handle('updater-check', async () => {
+  return autoUpdater.checkForUpdates();
+});
+
+ipcMain.handle('updater-download', async (_, downloadUrl) => {
+  return autoUpdater.downloadUpdate(downloadUrl, (p) => {
+    mainWindow?.webContents.send('updater-progress', p);
+  });
+});
+
+ipcMain.handle('updater-install', async () => {
+  return autoUpdater.restartAndInstall();
+});
+
+ipcMain.handle('updater-get-version', async () => {
+  return autoUpdater.getCurrentVersion();
 });

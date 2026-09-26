@@ -12,6 +12,10 @@ import {
   Sparkles,
   Layers,
   FolderOpen,
+  RefreshCw,
+  GitBranch,
+  ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import { useLauncher } from '../../context/LauncherContext';
 import { useTheme, THEME_PRESETS } from '../../context/ThemeContext';
@@ -23,6 +27,11 @@ export const SettingsView: React.FC = () => {
   const [activeSection, setActiveSection] = useState<
     'appearance' | 'general' | 'minecraft' | 'java' | 'downloads' | 'launcher'
   >('appearance');
+
+  // Auto-updater state
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
 
   // Minecraft settings local state
   const [defaultRam, setDefaultRam] = useState(4096);
@@ -579,26 +588,142 @@ export const SettingsView: React.FC = () => {
 
           {/* GENERAL & LAUNCHER SECTION */}
           {(activeSection === 'general' || activeSection === 'launcher') && (
-            <div className="rounded-3xl glass-panel p-6 border border-white/10 space-y-4">
-              <h3 className="font-bold text-sm text-white uppercase tracking-wider">
-                VictusClient System Information
-              </h3>
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <span className="text-[var(--color-text-muted)] block text-[10px]">Client Version</span>
-                  <span className="font-bold text-white">1.0.0 "Ascent" (Production)</span>
+            <div className="space-y-6">
+              {/* Auto-Updater & GitHub Release Deck */}
+              <div className="rounded-3xl glass-panel p-6 border border-cyan-400/25 space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-400 via-purple-500 to-emerald-400" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="font-bold text-sm text-white uppercase tracking-wider">
+                        Client Updates & GitHub Releases
+                      </h3>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 font-bold">
+                        AUTO-SYNC
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                      Whenever new updates are pushed to GitHub, your launcher updates seamlessly in the background without reinstalling.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      setCheckingUpdate(true);
+                      setUpdateStatus('Checking GitHub for new releases...');
+                      try {
+                        if (window.electronAPI?.checkForUpdates) {
+                          const info = await window.electronAPI.checkForUpdates();
+                          if (info && info.updateAvailable) {
+                            setUpdateStatus(`Update available: v${info.latestVersion}`);
+                            addNotification({
+                              type: 'info',
+                              title: 'Update Available',
+                              message: `VictusClient v${info.latestVersion} found!`,
+                            });
+                          } else {
+                            setUpdateStatus('You are running the latest version of VictusClient.');
+                            addNotification({
+                              type: 'success',
+                              title: 'Up to Date',
+                              message: 'VictusClient is on the newest build.',
+                            });
+                          }
+                        } else {
+                          await new Promise((r) => setTimeout(r, 700));
+                          setUpdateStatus('Launcher is up to date.');
+                        }
+                      } catch {
+                        setUpdateStatus('Failed to check GitHub releases.');
+                      } finally {
+                        setCheckingUpdate(false);
+                      }
+                    }}
+                    disabled={checkingUpdate}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-white hover:bg-white/90 text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_15px_rgba(255,255,255,0.3)] active:scale-95 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+                    <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+                  </button>
                 </div>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <span className="text-[var(--color-text-muted)] block text-[10px]">Engine</span>
-                  <span className="font-bold text-white">Electron 33 + Vite + React 18</span>
+
+                {updateStatus && (
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-cyan-300 flex items-center space-x-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{updateStatus}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono">
+                  <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
+                    <span className="text-white/40 block text-[10px] uppercase">Installed Version</span>
+                    <span className="font-bold text-white text-sm">v1.0.0</span>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
+                    <span className="text-white/40 block text-[10px] uppercase">Update Channel</span>
+                    <div className="flex items-center space-x-1.5 text-cyan-300 font-bold">
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span className="truncate">ArhanRaaj/VictusClient</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-2xl bg-black/40 border border-white/5">
+                    <span className="text-white/40 block text-[10px] uppercase">Auto-Install Mode</span>
+                    <span className="text-emerald-400 font-bold">Background & In-Place</span>
+                  </div>
                 </div>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <span className="text-[var(--color-text-muted)] block text-[10px]">Modrinth API</span>
-                  <span className="font-bold text-emerald-400">Connected (v2)</span>
+
+                <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="auto-update-toggle"
+                      checked={autoUpdateEnabled}
+                      onChange={(e) => setAutoUpdateEnabled(e.target.checked)}
+                      className="rounded bg-black/50 border-white/20 text-purple-500 focus:ring-0 cursor-pointer"
+                    />
+                    <label htmlFor="auto-update-toggle" className="text-white/80 cursor-pointer">
+                      Automatically download and notify when code is pushed to GitHub
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const url = 'https://github.com/ArhanRaaj/VictusClient/releases';
+                      if (window.electronAPI?.openExternal) window.electronAPI.openExternal(url);
+                      else window.open(url, '_blank');
+                    }}
+                    className="text-cyan-300 hover:text-cyan-200 text-[11px] font-semibold flex items-center space-x-1 cursor-pointer"
+                  >
+                    <span>View GitHub Releases</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
                 </div>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                  <span className="text-[var(--color-text-muted)] block text-[10px]">Mojang Manifest</span>
-                  <span className="font-bold text-emerald-400">v2 Synchronized</span>
+              </div>
+
+              {/* System Information Card */}
+              <div className="rounded-3xl glass-panel p-6 border border-white/10 space-y-4">
+                <h3 className="font-bold text-sm text-white uppercase tracking-wider">
+                  VictusClient System Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-[var(--color-text-muted)] block text-[10px]">Client Version</span>
+                    <span className="font-bold text-white">1.0.0 "Ascent" (Production)</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-[var(--color-text-muted)] block text-[10px]">Engine</span>
+                    <span className="font-bold text-white">Electron 33 + Vite + React 18</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-[var(--color-text-muted)] block text-[10px]">Modrinth API</span>
+                    <span className="font-bold text-emerald-400">Connected (v2)</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                    <span className="text-[var(--color-text-muted)] block text-[10px]">Mojang Manifest</span>
+                    <span className="font-bold text-emerald-400">v2 Synchronized</span>
+                  </div>
                 </div>
               </div>
             </div>

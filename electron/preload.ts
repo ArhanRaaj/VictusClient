@@ -70,6 +70,14 @@ export interface IElectronAPI {
   selectFileDialog: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>;
   openExternal: (url: string) => Promise<void>;
   getSystemInfo: () => Promise<{ os: string; totalMem: number; freeMem: number; cpus: number }>;
+
+  // Auto-Updater
+  checkForUpdates: () => Promise<any>;
+  downloadUpdate: (downloadUrl: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+  installUpdate: () => Promise<boolean>;
+  getAppVersion: () => Promise<string>;
+  onUpdateAvailable: (callback: (info: any) => void) => () => void;
+  onUpdateProgress: (callback: (progress: any) => void) => () => void;
 }
 
 const api: IElectronAPI = {
@@ -133,6 +141,21 @@ const api: IElectronAPI = {
   selectFileDialog: (filters) => ipcRenderer.invoke('dialog-select-file', filters),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   getSystemInfo: () => ipcRenderer.invoke('system-info'),
+
+  checkForUpdates: () => ipcRenderer.invoke('updater-check'),
+  downloadUpdate: (downloadUrl: string) => ipcRenderer.invoke('updater-download', downloadUrl),
+  installUpdate: () => ipcRenderer.invoke('updater-install'),
+  getAppVersion: () => ipcRenderer.invoke('updater-get-version'),
+  onUpdateAvailable: (callback: (info: any) => void) => {
+    const sub = (_: any, data: any) => callback(data);
+    ipcRenderer.on('updater-available', sub);
+    return () => ipcRenderer.removeListener('updater-available', sub);
+  },
+  onUpdateProgress: (callback: (progress: any) => void) => {
+    const sub = (_: any, data: any) => callback(data);
+    ipcRenderer.on('updater-progress', sub);
+    return () => ipcRenderer.removeListener('updater-progress', sub);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

@@ -31,6 +31,7 @@ import { CloudServer, CloudWallet, ServerSoftware } from '../../types/servers';
 import { useLauncher } from '../../context/LauncherContext';
 import { useTheme } from '../../context/ThemeContext';
 import { MINECRAFT_VERSIONS, DEFAULT_VERSION } from '../../constants/versions';
+import { useVictusCloud } from '../../context/VictusCloudContext';
 
 interface ServersViewProps {
   setActiveTab?: (tab: string) => void;
@@ -167,6 +168,17 @@ export const ServersView: React.FC<ServersViewProps> = ({ setActiveTab }) => {
   const { theme } = useTheme();
   const accentColor = theme.sidebarColor || theme.primaryAccent || '#7c3aed';
 
+  const {
+    cloudUser,
+    isLoggedIn,
+    requireCloudAuth,
+    openWebPanel,
+    setIsAuthModalOpen,
+    syncCloudData,
+    syncState,
+    updateCoins,
+  } = useVictusCloud();
+
   const [servers, setServers] = useState<CloudServer[]>(() => {
     try {
       const saved = localStorage.getItem('victus_cloud_servers');
@@ -191,6 +203,19 @@ export const ServersView: React.FC<ServersViewProps> = ({ setActiveTab }) => {
   const [serverConsoleLogs, setServerConsoleLogs] = useState<string[]>([]);
   const [claimingCoins, setClaimingCoins] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Sync with cloudUser if logged in
+  useEffect(() => {
+    if (cloudUser) {
+      setWallet((prev) => ({
+        ...prev,
+        coins: cloudUser.coins,
+        tier: cloudUser.tier,
+        maxServers: cloudUser.maxServers,
+        totalRamLimitMb: cloudUser.totalRamMb,
+      }));
+    }
+  }, [cloudUser]);
 
   // Sync to local storage
   useEffect(() => {

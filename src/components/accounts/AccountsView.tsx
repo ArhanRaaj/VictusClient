@@ -43,11 +43,17 @@ export const AccountsView: React.FC = () => {
     setLoggingIn(true);
     try {
       const res = await startMicrosoftLogin();
-      if (res.userCode && res.verificationUri) {
+      if (res && res.success && res.account) {
+        setShowAddModal(false);
+        setDeviceFlowData(null);
+        addNotification('success', 'Microsoft Account Connected', `Logged in as ${res.account.username}!`);
+      } else if (res && res.userCode && res.verificationUri) {
         setDeviceFlowData({ userCode: res.userCode, verificationUri: res.verificationUri });
+      } else if (res && res.error) {
+        addNotification('error', 'Login Failed', res.error);
       }
-    } catch (e) {
-      addNotification('error', 'Login Error', 'Failed to initialize Microsoft login.');
+    } catch (e: any) {
+      addNotification('error', 'Login Error', e?.message || 'Failed to authenticate with Microsoft.');
     } finally {
       setLoggingIn(false);
     }
@@ -262,17 +268,24 @@ export const AccountsView: React.FC = () => {
                     <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 mx-auto flex items-center justify-center">
                       <Key className="w-6 h-6" />
                     </div>
-                    <p className="text-xs text-[var(--color-text-muted)] max-w-xs mx-auto">
-                      Sign in with your official Mojang / Microsoft account to access official multiplayer servers and your skins.
+                    <p className="text-xs text-[var(--color-text-muted)] max-w-xs mx-auto leading-relaxed">
+                      Opens an official, secure Microsoft authentication window to verify your Mojang Minecraft license and download your skins.
                     </p>
-                    <button
-                      onClick={handleStartMicrosoft}
-                      disabled={loggingIn}
-                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg flex items-center justify-center space-x-2"
-                    >
-                      <Key className="w-4 h-4" />
-                      <span>{loggingIn ? 'Connecting...' : 'Sign in with Microsoft'}</span>
-                    </button>
+                    {loggingIn ? (
+                      <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-400/30 text-blue-200 text-xs font-mono flex items-center justify-center space-x-2.5">
+                        <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>Microsoft sign-in window is open... Complete login to finish</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleStartMicrosoft}
+                        disabled={loggingIn}
+                        className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(59,130,246,0.4)] flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-95"
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>Sign in with Microsoft</span>
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="flex justify-end pt-2">

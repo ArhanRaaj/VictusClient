@@ -16,6 +16,7 @@ import { InstanceWizardModal } from './components/instances/InstanceWizardModal'
 import { InstanceEditModal } from './components/instances/InstanceEditModal';
 import { VictusCloudAuthModal } from './components/cloud/VictusCloudAuthModal';
 import { WebControlPanelModal } from './components/cloud/WebControlPanelModal';
+import { AutoUpdateBanner } from './components/updater/AutoUpdateBanner';
 import { Instance } from './types/launcher';
 import { useTheme } from './context/ThemeContext';
 import { ParticleBackground } from './components/layout/ParticleBackground';
@@ -143,6 +144,9 @@ export const App: React.FC = () => {
 
       {/* Victus Cloud Web Control Panel Modal */}
       <WebControlPanelModal />
+
+      {/* Auto-Updater Banner for Zero-Reinstall Background Updates */}
+      <AutoUpdateBanner />
 
       {/* Global Notification Toast Container */}
       <NotificationToast />
