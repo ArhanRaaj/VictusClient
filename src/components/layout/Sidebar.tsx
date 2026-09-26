@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Home,
   Folder,
+  Package,
   Server,
   Shirt,
   Terminal,
@@ -24,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'instances', label: 'Instances', icon: Folder },
+    { id: 'contents', label: 'Mods & Content', icon: Package },
     { id: 'servers', label: 'Free Servers', icon: Server },
     { id: 'skins', label: 'Skin & Cape', icon: Shirt },
     { id: 'console', label: 'Console', icon: Terminal },

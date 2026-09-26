@@ -378,7 +378,7 @@ namespace VictusClientInstaller
             };
             badge.Child = new TextBlock
             {
-                Text = "v1.0.4 \u2022 Official",
+                Text = "v1.0.5 \u2022 Official",
                 FontSize = 10,
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
@@ -701,7 +701,7 @@ namespace VictusClientInstaller
                 if (!File.Exists(exePath))
                 {
                     UpdateProgress(25, "Fetching latest VictusClient runtime from GitHub...");
-                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup-1.0.4.exe";
+                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup-1.0.5.exe";
                     string tempExe = Path.Combine(Path.GetTempPath(), "VictusClient-Setup-Online.exe");
 
                     DownloadFileWithProgress(downloadUrl, tempExe, 25, 80);
@@ -854,7 +854,7 @@ namespace VictusClientInstaller
                     {
                         string exePath = Path.Combine(installDir, "VictusClient.exe");
                         key.SetValue("DisplayName", "VictusClient");
-                        key.SetValue("DisplayVersion", "1.0.4");
+                        key.SetValue("DisplayVersion", "1.0.5");
                         key.SetValue("Publisher", "VictusClient Team");
                         key.SetValue("InstallLocation", installDir);
                         key.SetValue("DisplayIcon", exePath);

@@ -50,7 +50,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
             Victus<span style={{ color: accentColor }}>Client</span>
           </span>
           <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-white/[0.06] text-white/50 border border-white/5">
-            v1.0.4
+            v1.0.5
           </span>
         </div>
       </div>

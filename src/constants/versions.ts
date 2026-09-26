@@ -1,4 +1,5 @@
 export const MINECRAFT_VERSIONS = [
+  '26.4',
   '26.3',
   '26.2',
   '26.1',
@@ -15,6 +16,7 @@ export const MINECRAFT_VERSIONS = [
 export type MinecraftVersion = (typeof MINECRAFT_VERSIONS)[number];
 
 export const POPULAR_VERSIONS = [
+  '26.4',
   '26.3',
   '26.2',
   '26.1',
@@ -23,4 +25,4 @@ export const POPULAR_VERSIONS = [
   '1.8',
 ];
 
-export const DEFAULT_VERSION = '26.3';
+export const DEFAULT_VERSION = '26.4';

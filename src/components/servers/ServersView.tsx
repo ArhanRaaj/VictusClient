@@ -1135,7 +1135,7 @@ const CreateServerModal: React.FC<CreateServerModalProps> = ({
               >
                 {MINECRAFT_VERSIONS.map((v) => (
                   <option key={v} value={v}>
-                    Minecraft {v} {v === '26.3' ? '(Recommended)' : ''}
+                    Minecraft {v} {v === '26.4' ? '(Recommended)' : ''}
                   </option>
                 ))}
               </select>

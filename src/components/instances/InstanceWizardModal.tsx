@@ -111,8 +111,8 @@ export const InstanceWizardModal: React.FC<InstanceWizardModalProps> = ({ isOpen
   useEffect(() => {
     if (isOpen) {
       setHasCustomName(false);
-      setName('Fabric 1.21.4');
-      setMcVersion('1.21.4');
+      setName('Fabric 26.4');
+      setMcVersion('26.4');
       setLoader('fabric');
       setRamMax(4096);
       setIcon('⚡');
@@ -327,7 +327,7 @@ export const InstanceWizardModal: React.FC<InstanceWizardModalProps> = ({ isOpen
                 >
                   {MINECRAFT_VERSIONS.map((v) => (
                     <option key={v} value={v} className="bg-[#12131c] text-white">
-                      Minecraft {v} {v === '26.3' ? '(Latest)' : ''}
+                      Minecraft {v} {v === '26.4' ? '(Latest)' : ''}
                     </option>
                   ))}
                 </select>

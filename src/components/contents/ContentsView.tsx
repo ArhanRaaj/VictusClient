@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search,
   Download,
@@ -15,12 +15,19 @@ import {
   RefreshCw,
   Power,
   X,
+  ChevronDown,
+  ShieldCheck,
+  AlertTriangle,
+  Info,
+  CheckCircle2,
+  HardDrive,
+  Cpu,
 } from 'lucide-react';
-import { ContentCategory, ContentItem, InstalledModFile } from '../../types/launcher';
+import { ContentCategory, ContentItem, InstalledModFile, Instance } from '../../types/launcher';
 import { useLauncher } from '../../context/LauncherContext';
 
 export const ContentsView: React.FC = () => {
-  const { activeInstance, addNotification, openFolder } = useLauncher();
+  const { instances, activeInstance, setActiveInstance, addNotification, openFolder } = useLauncher();
   const [activeCategory, setActiveCategory] = useState<ContentCategory>('mods');
   const [activeSubTab, setActiveSubTab] = useState<'browse' | 'installed'>('browse');
   const [query, setQuery] = useState('');
@@ -29,16 +36,45 @@ export const ContentsView: React.FC = () => {
   const [installedMods, setInstalledMods] = useState<InstalledModFile[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<'downloads' | 'relevance' | 'follows'>('downloads');
+  const [strictVersionFilter, setStrictVersionFilter] = useState(true);
+  const [instanceDropdownOpen, setInstanceDropdownOpen] = useState(false);
+  const [installedSearch, setInstalledSearch] = useState('');
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setInstanceDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const categories: { id: ContentCategory; label: string; icon: string }[] = [
     { id: 'mods', label: 'Mods', icon: '🧩' },
     { id: 'shaders', label: 'Shaders', icon: '✨' },
     { id: 'resourcepacks', label: 'Resource Packs', icon: '🎨' },
-    { id: 'modpacks', label: 'Modpacks', icon: '📦' },
     { id: 'datapacks', label: 'Datapacks', icon: '⚡' },
+    { id: 'modpacks', label: 'Modpacks', icon: '📦' },
   ];
 
-  // Curated fallbacks for instant instant browsing across all categories
+  // Helper to map custom / launcher versions to real Mojang versions for Modrinth
+  const resolveRealGameVersion = (version?: string): string => {
+    if (!version) return '1.21.4';
+    const v = version.trim();
+    if (v.startsWith('26.') || v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
+    if (v === '1.20.8' || v === '1.20') return '1.20.4';
+    if (v === '1.8') return '1.8.9';
+    return v;
+  };
+
+  const currentRealVersion = resolveRealGameVersion(activeInstance?.version);
+  const currentLoader = activeInstance?.loader && activeInstance.loader !== 'vanilla' ? activeInstance.loader : undefined;
+
+  // Curated fallbacks across all categories
   const CURATED_FALLBACKS: Record<ContentCategory, ContentItem[]> = {
     mods: [
       {
@@ -52,35 +88,35 @@ export const ContentsView: React.FC = () => {
         downloads: 231000000,
         follows: 125000,
         loaders: ['fabric', 'neoforge'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
       {
         id: 'iris',
         slug: 'iris',
         title: 'Iris Shaders',
-        description: 'A modern shaders mod for Minecraft compatible with existing Shaders Presets.',
+        description: 'A modern shaders mod for Minecraft compatible with existing OptiFine/Iris shader packs.',
         author: 'coderbot',
         iconUrl: 'https://cdn.modrinth.com/data/YL57xq9U/icon.png',
         categories: ['shaders', 'optimization'],
         downloads: 179000000,
         follows: 98000,
         loaders: ['fabric', 'neoforge'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
       {
         id: 'fabric-api',
         slug: 'fabric-api',
         title: 'Fabric API',
-        description: 'Core essential hooks and inter-compatibility layer for Fabric mod ecosystem.',
+        description: 'Core essential hooks and inter-compatibility layer for the Fabric mod ecosystem.',
         author: 'modmuss50',
         iconUrl: 'https://cdn.modrinth.com/data/P7dR8mSH/icon.png',
         categories: ['library'],
         downloads: 261000000,
         follows: 240000,
         loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
       {
@@ -94,121 +130,79 @@ export const ContentsView: React.FC = () => {
         downloads: 140000000,
         follows: 75000,
         loaders: ['fabric', 'neoforge'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
       {
         id: 'ferrite-core',
         slug: 'ferrite-core',
         title: 'FerriteCore',
-        description: 'Memory usage optimizations drastically reducing Minecraft RAM allocation requirements.',
+        description: 'Memory usage optimizations reducing RAM consumption by up to 50%.',
         author: 'malte0811',
         iconUrl: 'https://cdn.modrinth.com/data/uXXizFIs/icon.png',
         categories: ['optimization'],
-        downloads: 130000000,
-        follows: 62000,
-        loaders: ['fabric', 'neoforge', 'forge'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        downloads: 110000000,
+        follows: 54000,
+        loaders: ['fabric', 'forge', 'neoforge'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
       {
         id: 'modmenu',
         slug: 'modmenu',
         title: 'Mod Menu',
-        description: 'Adds a sleek in-game mod list screen to view configured and installed mods.',
+        description: 'Adds an in-game mod list screen and config manager to browse installed mods.',
         author: 'TerraformersMC',
         iconUrl: 'https://cdn.modrinth.com/data/mOgUt4GM/icon.png',
         categories: ['utility'],
-        downloads: 115000000,
-        follows: 88000,
+        downloads: 185000000,
+        follows: 112000,
         loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'mods',
       },
     ],
     shaders: [
       {
-        id: 'complementary-reimagined',
-        slug: 'complementary-reimagined',
-        title: 'Complementary Shaders - Reimagined',
-        description: 'Exceptional visual polish with custom water, clouds, god rays, and high performance.',
-        author: 'EminGT',
-        iconUrl: 'https://cdn.modrinth.com/data/R2Fr3SZJ/icon.png',
-        categories: ['realistic', 'fantasy'],
-        downloads: 67200000,
-        follows: 85000,
-        loaders: ['iris', 'optifine'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'shaders',
-      },
-      {
         id: 'complementary-unbound',
         slug: 'complementary-unbound',
         title: 'Complementary Shaders - Unbound',
-        description: 'Stunning artistic lighting, atmospheric scattering, aurora borealis, and deep reflections.',
+        description: 'A premium Minecraft shaderpack aiming for visual perfection with peak performance.',
+        author: 'EminGT',
+        iconUrl: 'https://cdn.modrinth.com/data/R2Fr3SZJ/icon.png',
+        categories: ['realistic'],
+        downloads: 62000000,
+        follows: 51000,
+        loaders: ['iris', 'optifine', 'canvas'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
+        projectType: 'shaders',
+      },
+      {
+        id: 'complementary-reimagined',
+        slug: 'complementary-reimagined',
+        title: 'Complementary Shaders - Reimagined',
+        description: 'Preserves the unique vanilla Minecraft aesthetic while adding stunning dynamic lighting.',
         author: 'EminGT',
         iconUrl: 'https://cdn.modrinth.com/data/1KVo5Edv/icon.png',
-        categories: ['realistic', 'fantasy'],
-        downloads: 43800000,
-        follows: 62000,
+        categories: ['vanilla-like'],
+        downloads: 48000000,
+        follows: 42000,
         loaders: ['iris', 'optifine'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'shaders',
       },
       {
         id: 'bsl-shaders',
         slug: 'bsl-shaders',
         title: 'BSL Shaders',
-        description: 'Bright, colorful, and distinct visual style with customizable real-time shadows.',
-        author: 'CaptTatsu',
+        description: 'Customizable and high-FPS shaderpack with warm lighting, soft shadows, and volumetric clouds.',
+        author: 'Capt_Tatsu',
         iconUrl: 'https://cdn.modrinth.com/data/Q1ZOzgcl/icon.png',
         categories: ['realistic'],
-        downloads: 29500000,
-        follows: 51000,
+        downloads: 39000000,
+        follows: 34000,
         loaders: ['iris', 'optifine'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'shaders',
-      },
-      {
-        id: 'photon-shaders',
-        slug: 'photon-shaders',
-        title: 'Photon Shaders',
-        description: 'Cutting edge shader pack balancing cinematic fidelity and gameplay smoothness.',
-        author: 'sixthsurge',
-        iconUrl: 'https://cdn.modrinth.com/data/m1k5tB1Z/icon.png',
-        categories: ['realistic', 'cinematic'],
-        downloads: 27000000,
-        follows: 44000,
-        loaders: ['iris'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'shaders',
-      },
-      {
-        id: 'solas-shader',
-        slug: 'solas-shader',
-        title: 'Solas Shader',
-        description: 'Fantasy volumetric clouds, 3D aurora, colored lighting, and hyper-optimized performance.',
-        author: 'Septonious',
-        iconUrl: 'https://cdn.modrinth.com/data/HjW3o9K2/icon.png',
-        categories: ['fantasy', 'vibrant'],
-        downloads: 17200000,
-        follows: 33000,
-        loaders: ['iris'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'shaders',
-      },
-      {
-        id: 'makeup-ultra-fast',
-        slug: 'makeup-ultra-fast',
-        title: 'MakeUp - Ultra Fast',
-        description: 'Modular, ultra-lightweight shader pack designed for maximum FPS on all hardware.',
-        author: 'XorDev',
-        iconUrl: 'https://cdn.modrinth.com/data/mH4t3p8X/icon.png',
-        categories: ['performance', 'minimal'],
-        downloads: 12400000,
-        follows: 28000,
-        loaders: ['iris', 'optifine'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'shaders',
       },
     ],
@@ -217,84 +211,28 @@ export const ContentsView: React.FC = () => {
         id: 'fresh-animations',
         slug: 'fresh-animations',
         title: 'Fresh Animations',
-        description: 'Dynamic mob animations giving Minecraft mobs expressive faces and natural movement.',
+        description: 'Dynamic, expressive mob animations giving all Minecraft creatures life.',
         author: 'FreshLX',
         iconUrl: 'https://cdn.modrinth.com/data/8BmcYKbN/icon.png',
-        categories: ['animations', 'mobs'],
-        downloads: 47700000,
+        categories: ['animation'],
+        downloads: 51000000,
         follows: 62000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        loaders: ['minecraft'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'resourcepacks',
       },
       {
         id: 'bare-bones',
         slug: 'bare-bones',
         title: 'Bare Bones',
-        description: 'A texture pack bringing your world and default textures to clean, vibrant simplified art.',
+        description: 'Brings the official Minecraft animated promotional trailer look into your game.',
         author: 'RobotPantaloons',
         iconUrl: 'https://cdn.modrinth.com/data/P3fC8P1s/icon.png',
-        categories: ['stylized', 'simplistic'],
-        downloads: 22100000,
-        follows: 41000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'resourcepacks',
-      },
-      {
-        id: 'better-leaves',
-        slug: 'better-leaves',
-        title: "Motschen's Better Leaves",
-        description: 'Round, fluffy 3D leaf models that transform Minecraft forests into dense wilderness.',
-        author: 'Motschen',
-        iconUrl: 'https://cdn.modrinth.com/data/qF1aWwE6/icon.png',
-        categories: ['3d', 'environment'],
-        downloads: 20200000,
+        categories: ['simplistic'],
+        downloads: 28000000,
         follows: 38000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'resourcepacks',
-      },
-      {
-        id: 'faithful-32x',
-        slug: 'faithful-32x',
-        title: 'Faithful 32x',
-        description: 'The definitive high-resolution vanilla enhancement pack staying true to original art.',
-        author: 'FaithfulTeam',
-        iconUrl: 'https://cdn.modrinth.com/data/I13tqy5r/icon.png',
-        categories: ['vanilla-plus', '32x'],
-        downloads: 18400000,
-        follows: 35000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'resourcepacks',
-      },
-      {
-        id: 'faithless',
-        slug: 'faithless',
-        title: 'Faithless',
-        description: 'Beautifully crafted RPG visual overhaul with custom icons, armor, and UI elements.',
-        author: 'ItsHardSole',
-        iconUrl: 'https://cdn.modrinth.com/data/b822d64d/icon.png',
-        categories: ['rpg', 'medieval'],
-        downloads: 11200000,
-        follows: 29000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'resourcepacks',
-      },
-      {
-        id: 'stay-true',
-        slug: 'stay-true',
-        title: 'Stay True',
-        description: 'Subtle vanilla texture improvements, connected textures, and natural block color variations.',
-        author: 'Trislux',
-        iconUrl: 'https://cdn.modrinth.com/data/4t8a644c/icon.png',
-        categories: ['vanilla-plus'],
-        downloads: 14500000,
-        follows: 26000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        loaders: ['minecraft'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'resourcepacks',
       },
     ],
@@ -302,85 +240,29 @@ export const ContentsView: React.FC = () => {
       {
         id: 'terralith',
         slug: 'terralith',
-        title: 'Terralith',
-        description: 'Transforms overworld world generation with nearly 100 brand-new, jaw-dropping biomes.',
+        title: 'Terralith Overworld Overhaul',
+        description: 'Massive world generation overhaul adding 100+ unique, stunning biomes to Minecraft.',
         author: 'Starmute',
         iconUrl: 'https://cdn.modrinth.com/data/8shDXydS/icon.png',
         categories: ['worldgen'],
-        downloads: 23200000,
-        follows: 45000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'datapacks',
-      },
-      {
-        id: 'dungeons-and-taverns',
-        slug: 'dungeons-and-taverns',
-        title: 'Dungeons and Taverns',
-        description: 'Generates sprawling underground dungeons, taverns, fortresses, and challenging arenas.',
-        author: 'NovaWostra',
-        iconUrl: 'https://cdn.modrinth.com/data/y2vY6Wd4/icon.png',
-        categories: ['structures', 'adventure'],
-        downloads: 21200000,
-        follows: 39000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'datapacks',
-      },
-      {
-        id: 'towns-and-towers',
-        slug: 'towns-and-towers',
-        title: 'Towns and Towers',
-        description: 'Extensive overhaul of villages, pillager outposts, and oceanic ships matching biome themes.',
-        author: 'Biban_Auriu',
-        iconUrl: 'https://cdn.modrinth.com/data/CV2A0Jc8/icon.png',
-        categories: ['structures'],
-        downloads: 17700000,
+        downloads: 32000000,
         follows: 31000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        loaders: ['datapack'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'datapacks',
       },
       {
         id: 'incendium',
         slug: 'incendium',
-        title: 'Incendium',
-        description: 'Nether expansion with 8 new biomes, volcanic spires, ruined castles, and Sanctum of Fire.',
+        title: 'Incendium Nether Expansion',
+        description: 'Completely redesigns the Nether dimension with terrifying castles and new structures.',
         author: 'Starmute',
-        iconUrl: 'https://cdn.modrinth.com/data/vSEH1erm/icon.png',
-        categories: ['worldgen', 'nether'],
-        downloads: 14200000,
-        follows: 27000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'datapacks',
-      },
-      {
-        id: 'nullscape',
-        slug: 'nullscape',
-        title: 'Nullscape',
-        description: 'Rewrites the End dimension with verticality, crystalline biomes, and eerie alien atmospheres.',
-        author: 'Starmute',
-        iconUrl: 'https://cdn.modrinth.com/data/LPjGiSO4/icon.png',
-        categories: ['worldgen', 'end'],
-        downloads: 11800000,
-        follows: 22000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'datapacks',
-      },
-      {
-        id: 'veinminer',
-        slug: 'veinminer',
-        title: 'VeinMiner',
-        description: 'Fast, comfortable mining tool enabling one-click mining of entire ore veins and trees.',
-        author: 'Miraculixx',
-        iconUrl: 'https://cdn.modrinth.com/data/Wb5oqrNJ/icon.png',
-        categories: ['utility', 'gameplay'],
-        downloads: 86300000,
+        iconUrl: 'https://cdn.modrinth.com/data/y2vY6Wd4/icon.png',
+        categories: ['worldgen'],
+        downloads: 18000000,
         follows: 19000,
-        loaders: ['all'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        loaders: ['datapack'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'datapacks',
       },
     ],
@@ -389,72 +271,29 @@ export const ContentsView: React.FC = () => {
         id: 'fabulously-optimized',
         slug: 'fabulously-optimized',
         title: 'Fabulously Optimized',
-        description: 'Top-tier Fabric modpack delivering OptiFine feature parity and massive FPS boosts.',
-        author: 'robotkoer',
+        description: 'A simple Fabric modpack that gives enormous FPS improvements and OptiFine feature parity.',
+        author: 'RobotKoer',
         iconUrl: 'https://cdn.modrinth.com/data/1KVo5Edv/icon.png',
         categories: ['optimization'],
-        downloads: 17600000,
-        follows: 48000,
+        downloads: 42000000,
+        follows: 38000,
         loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'modpacks',
-      },
-      {
-        id: 'better-mc',
-        slug: 'better-mc',
-        title: 'Better MC [Fabric] - BMC2',
-        description: 'The ultimate Minecraft overhaul featuring bosses, dungeons, dimensions, and quests.',
-        author: 'SHXRKIE',
-        iconUrl: 'https://cdn.modrinth.com/data/2X54e59f/icon.png',
-        categories: ['adventure', 'quests'],
-        downloads: 3500000,
-        follows: 25000,
-        loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'modpacks',
-      },
-      {
-        id: 'cobblemon-official',
-        slug: 'cobblemon-official',
-        title: 'Cobblemon Official Modpack',
-        description: 'Open-world Pokémon adventure modpack with seamless Minecraft battle animations.',
-        author: 'CobbledStudios',
-        iconUrl: 'https://cdn.modrinth.com/data/AANobbMI/icon.png',
-        categories: ['adventure', 'gameplay'],
-        downloads: 10800000,
-        follows: 34000,
-        loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
-        projectType: 'modpacks',
-      },
-      {
-        id: 'simply-optimized',
-        slug: 'simply-optimized',
-        title: 'Simply Optimized',
-        description: 'A pure, lightweight performance modpack focused on maximizing Minecraft framerates.',
-        author: 'SimplyTeam',
-        iconUrl: 'https://cdn.modrinth.com/data/YL57xq9U/icon.png',
-        categories: ['optimization'],
-        downloads: 8200000,
-        follows: 21000,
-        loaders: ['fabric'],
-        gameVersions: ['1.21.4', '1.20.4'],
+        gameVersions: ['26.4', '26.3', '1.21.4', '1.20.4'],
         projectType: 'modpacks',
       },
     ],
   };
 
-  // Fetch from Modrinth API or fallback to curated list
-  const fetchContent = async (searchQuery = query, category = activeCategory) => {
+  const fetchContent = async (searchQuery: string, category: ContentCategory) => {
     setLoading(true);
     try {
       if (window.electronAPI) {
         const res = await window.electronAPI.searchModrinth({
           query: searchQuery,
           category,
-          loader: category === 'mods' && activeInstance?.loader !== 'vanilla' ? activeInstance?.loader : undefined,
-          gameVersion: activeInstance?.version,
-          limit: 24,
+          loader: category === 'mods' && currentLoader ? currentLoader : undefined,
+          gameVersion: strictVersionFilter ? currentRealVersion : undefined,
+          limit: 30,
         });
 
         if (res && res.hits && res.hits.length > 0) {
@@ -478,7 +317,7 @@ export const ContentsView: React.FC = () => {
         }
       }
 
-      // Fallback to rich curated preset if API returned 0 hits or offline
+      // Fallback curated list
       const fallbackList = CURATED_FALLBACKS[category] || [];
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -500,7 +339,7 @@ export const ContentsView: React.FC = () => {
 
   useEffect(() => {
     fetchContent(query, activeCategory);
-  }, [activeCategory]);
+  }, [activeCategory, activeInstance?.version, activeInstance?.loader, strictVersionFilter]);
 
   const loadInstalled = async () => {
     if (!activeInstance) return;
@@ -518,10 +357,44 @@ export const ContentsView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeSubTab === 'installed') {
-      loadInstalled();
+    loadInstalled();
+  }, [activeCategory, activeInstance?.id]);
+
+  // Check if an item is already installed in the active instance
+  const isItemInstalled = (item: ContentItem): boolean => {
+    const slug = (item.slug || '').toLowerCase();
+    const title = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return installedMods.some((m) => {
+      const fn = m.fileName.toLowerCase();
+      const mn = m.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return fn.includes(slug) || mn.includes(title) || fn.includes(title);
+    });
+  };
+
+  // Check if item claims compatibility with active instance version
+  const isItemCompatible = (item: ContentItem): boolean => {
+    if (!activeInstance) return true;
+    const realVer = currentRealVersion;
+    const hasVersionMatch =
+      !item.gameVersions ||
+      item.gameVersions.length === 0 ||
+      item.gameVersions.some((gv) => {
+        if (gv === activeInstance.version || gv === realVer) return true;
+        if (realVer.startsWith('1.21') && gv.startsWith('1.21')) return true;
+        if (realVer.startsWith('1.20') && gv.startsWith('1.20')) return true;
+        return false;
+      });
+
+    if (activeCategory === 'mods' && currentLoader) {
+      const hasLoaderMatch =
+        !item.loaders ||
+        item.loaders.length === 0 ||
+        item.loaders.some((l) => l.toLowerCase() === currentLoader.toLowerCase());
+      return hasVersionMatch && hasLoaderMatch;
     }
-  }, [activeSubTab, activeCategory, activeInstance]);
+
+    return hasVersionMatch;
+  };
 
   const handleInstallSingle = async (item: ContentItem) => {
     if (!activeInstance) {
@@ -529,46 +402,74 @@ export const ContentsView: React.FC = () => {
       return;
     }
 
+    const realVer = currentRealVersion;
+    const loader = currentLoader;
+
     setInstallingIds((prev) => new Set(prev).add(item.id));
-    addNotification('info', 'Downloading', `Installing ${item.title} to "${activeInstance.name}"...`);
+    addNotification('info', 'Searching Release', `Locating compatible ${item.title} for ${activeInstance.name} (v${activeInstance.version})...`);
 
     try {
       if (window.electronAPI) {
-        // Fetch latest version from Modrinth
+        // Specifically query Modrinth for versions strictly matching this instance's loader and resolved Minecraft version!
         const versions = await window.electronAPI.getModrinthVersions(
           item.slug,
-          activeCategory === 'mods' && activeInstance.loader !== 'vanilla' ? [activeInstance.loader] : undefined,
-          activeInstance.version.startsWith('26.') ? undefined : [activeInstance.version]
+          activeCategory === 'mods' && loader ? [loader] : undefined,
+          [realVer]
         );
-        if (versions && versions.length > 0) {
-          const primaryFile = versions[0].files?.find((f: any) => f.primary) || versions[0].files[0];
-          if (primaryFile) {
-            await window.electronAPI.installContentFile({
-              instanceId: activeInstance.id,
-              category: activeCategory,
-              fileUrl: primaryFile.url,
-              fileName: primaryFile.filename,
-              projectId: item.id,
-              versionId: versions[0].id,
-            });
-          }
+
+        if (!versions || versions.length === 0) {
+          throw new Error(
+            `No compatible release of "${item.title}" found for Minecraft ${activeInstance.version} (${realVer})${
+              loader ? ` with ${loader}` : ''
+            }.`
+          );
         }
-      }
-      setTimeout(() => {
-        setInstallingIds((prev) => {
-          const n = new Set(prev);
-          n.delete(item.id);
-          return n;
+
+        // Strictly match version supporting current game version
+        const targetVersion =
+          versions.find((v: any) => {
+            const hasVer = v.game_versions && v.game_versions.some((gv: string) => {
+              return gv === realVer || gv === activeInstance.version || (realVer.startsWith('1.21') && gv.startsWith('1.21'));
+            });
+            if (activeCategory === 'mods' && loader) {
+              const hasLoader = v.loaders && v.loaders.map((l: string) => l.toLowerCase()).includes(loader.toLowerCase());
+              return hasVer && hasLoader;
+            }
+            return hasVer;
+          }) || versions[0];
+
+        const primaryFile = targetVersion.files?.find((f: any) => f.primary) || targetVersion.files?.[0];
+        if (!primaryFile) {
+          throw new Error(`No downloadable file available for ${item.title} (${targetVersion.version_number}).`);
+        }
+
+        const res = await window.electronAPI.installContentFile({
+          instanceId: activeInstance.id,
+          category: activeCategory,
+          fileUrl: primaryFile.url,
+          fileName: primaryFile.filename,
+          projectId: item.id,
+          versionId: targetVersion.id,
         });
-        addNotification('success', 'Installed', `${item.title} installed successfully!`);
-      }, 1200);
-    } catch (e) {
+
+        if (!res.success) {
+          throw new Error(res.error || 'Failed to save downloaded file.');
+        }
+
+        addNotification('success', 'Installed Successfully', `${item.title} (${targetVersion.version_number}) installed to "${activeInstance.name}"!`);
+        loadInstalled();
+      } else {
+        // Web simulation
+        addNotification('success', 'Installed', `${item.title} installed for ${activeInstance.name}!`);
+      }
+    } catch (err: any) {
+      addNotification('error', 'Installation Incompatible', err.message || `Could not install ${item.title}`);
+    } finally {
       setInstallingIds((prev) => {
-        const n = new Set(prev);
-        n.delete(item.id);
-        return n;
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
       });
-      addNotification('error', 'Installation Failed', `Could not install ${item.title}`);
     }
   };
 
@@ -599,7 +500,7 @@ export const ContentsView: React.FC = () => {
         prev.map((m) => (m.fileName === mod.fileName ? { ...m, enabled: !m.enabled } : m))
       );
     }
-    addNotification('info', 'Mod Updated', `${mod.name} is now ${!mod.enabled ? 'enabled' : 'disabled'}.`);
+    addNotification('info', 'File Updated', `${mod.name} is now ${!mod.enabled ? 'enabled' : 'disabled'}.`);
   };
 
   const deleteModFile = async (mod: InstalledModFile) => {
@@ -610,62 +511,121 @@ export const ContentsView: React.FC = () => {
     } else {
       setInstalledMods((prev) => prev.filter((m) => m.fileName !== mod.fileName));
     }
-    addNotification('info', 'File Deleted', `Removed ${mod.name} from instance.`);
+    addNotification('info', 'File Removed', `Deleted ${mod.name} from "${activeInstance.name}".`);
   };
+
+  // Filtered and sorted items
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      if (sortBy === 'downloads') return b.downloads - a.downloads;
+      if (sortBy === 'follows') return b.follows - a.follows;
+      return 0; // relevance
+    });
+  }, [items, sortBy]);
+
+  const filteredInstalledMods = useMemo(() => {
+    if (!installedSearch.trim()) return installedMods;
+    const q = installedSearch.toLowerCase();
+    return installedMods.filter((m) => m.name.toLowerCase().includes(q) || m.fileName.toLowerCase().includes(q));
+  }, [installedMods, installedSearch]);
+
+  const totalInstalledSizeMB = useMemo(() => {
+    const bytes = installedMods.reduce((acc, m) => acc + (m.size || 0), 0);
+    return (bytes / 1024 / 1024).toFixed(1);
+  }, [installedMods]);
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 select-none">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
+      {/* Top Banner & Target Instance Capsule */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-white/[0.08]">
         <div>
-          <div className="flex items-center space-x-2 text-[var(--color-primary-light)] text-xs font-bold uppercase tracking-wider mb-1">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Content Directory</span>
+          <div className="flex items-center space-x-2 text-cyan-400 text-xs font-bold uppercase tracking-wider mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Official Modrinth Directory</span>
+            <span className="text-white/20">•</span>
+            <span className="text-purple-300">Targeted Multi-Loader Engine</span>
           </div>
-          <h1 className="font-display font-black text-2xl sm:text-3xl text-white tracking-tight">
-            Mods & Content Manager
+          <h1 className="font-display font-black text-2xl sm:text-3xl text-white tracking-tight flex items-center space-x-3">
+            <span>Mods & Visual Customization</span>
           </h1>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-            Active Instance:{' '}
-            <span className="font-bold text-white">
-              {activeInstance?.name || 'None Selected'} ({activeInstance?.loader} {activeInstance?.version})
-            </span>
+          <p className="text-xs text-white/50 mt-1">
+            Browse and install high-performance Fabric/Forge mods, shaders, and resource packs verified for your active instance.
           </p>
         </div>
 
-        {/* Action Tabs: Browse vs Installed */}
-        <div className="flex items-center space-x-2">
-          <div className="flex p-1 rounded-xl bg-white/5 border border-white/10 text-xs">
+        {/* Target Instance Picker Capsule */}
+        <div className="flex items-center space-x-3">
+          <div className="relative" ref={dropdownRef}>
             <button
-              onClick={() => setActiveSubTab('browse')}
-              className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
-                activeSubTab === 'browse'
-                  ? 'bg-[var(--color-primary)] text-white shadow-md'
-                  : 'text-[var(--color-text-muted)] hover:text-white'
-              }`}
+              onClick={() => setInstanceDropdownOpen(!instanceDropdownOpen)}
+              className="flex items-center space-x-3 px-4 py-2.5 rounded-2xl bg-[#141624] border border-cyan-500/30 hover:border-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all text-left group"
             >
-              Browse Modrinth
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center text-sm shadow-md flex-shrink-0">
+                {activeInstance?.icon || '⚡'}
+              </div>
+              <div className="overflow-hidden">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 flex items-center space-x-1.5">
+                  <span>Target Instance</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <div className="text-xs font-bold text-white truncate max-w-[140px] sm:max-w-[180px]">
+                  {activeInstance ? activeInstance.name : 'No Instance Selected'}
+                </div>
+              </div>
+              <div className="flex items-center space-x-1.5 pl-2 border-l border-white/10">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-white/10 text-white/80">
+                  {activeInstance?.version || '26.4'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white transition-colors" />
+              </div>
             </button>
-            <button
-              onClick={() => setActiveSubTab('installed')}
-              className={`px-4 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
-                activeSubTab === 'installed'
-                  ? 'bg-[var(--color-primary)] text-white shadow-md'
-                  : 'text-[var(--color-text-muted)] hover:text-white'
-              }`}
-            >
-              <span>Installed</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
-                {installedMods.length}
-              </span>
-            </button>
+
+            {/* Instance Switcher Dropdown */}
+            {instanceDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-2xl bg-[#0e101a] border border-white/15 shadow-2xl p-2 z-50 backdrop-blur-2xl">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-white/40 px-3 py-1.5">
+                  Select Target Instance
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-1">
+                  {instances.map((inst) => {
+                    const isSelected = activeInstance?.id === inst.id;
+                    return (
+                      <button
+                        key={inst.id}
+                        onClick={() => {
+                          setActiveInstance(inst);
+                          setInstanceDropdownOpen(false);
+                          addNotification('info', 'Target Changed', `Now managing content for "${inst.name}"`);
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-cyan-500/20 to-purple-600/20 border border-cyan-500/40 text-white'
+                            : 'hover:bg-white/5 text-white/70 hover:text-white border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2.5 truncate">
+                          <span className="text-base">{inst.icon || '⚡'}</span>
+                          <div className="truncate">
+                            <div className="text-xs font-bold truncate">{inst.name}</div>
+                            <div className="text-[10px] text-white/40">
+                              {inst.loader} • Minecraft {inst.version}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {activeInstance && (
             <button
               onClick={() => openFolder(activeInstance.id, activeCategory)}
-              className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-all"
-              title="Open Category Folder in Windows Explorer"
+              className="p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-all shadow-sm"
+              title="Open Content Folder in File Explorer"
             >
               <FolderOpen className="w-4 h-4" />
             </button>
@@ -673,42 +633,77 @@ export const ContentsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Category Pills (MODS, SHADERS, RESOURCE PACKS, MODPACKS, DATAPACKS) */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-        {categories.map((cat) => (
+      {/* Navigation Sub-Tabs & Category Pills */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Category Pills */}
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => {
+                setActiveCategory(cat.id);
+                setQuery('');
+              }}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${
+                activeCategory === cat.id
+                  ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.35)]'
+                  : 'bg-[#121422]/70 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <span>{cat.icon}</span>
+              <span>{cat.label}</span>
+              {installedMods.length > 0 && activeCategory === cat.id && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+                  {installedMods.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* View Switcher: Browse vs Installed */}
+        <div className="flex items-center p-1 rounded-2xl bg-[#121422] border border-white/10 text-xs flex-shrink-0">
           <button
-            key={cat.id}
-            onClick={() => {
-              setActiveCategory(cat.id);
-              setQuery('');
-              fetchContent('', cat.id);
-            }}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${
-              activeCategory === cat.id
-                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white border-[var(--color-primary-light)] shadow-[0_0_15px_var(--color-glow)]'
-                : 'bg-white/5 border-white/5 text-[var(--color-text-muted)] hover:text-white hover:bg-white/10'
+            onClick={() => setActiveSubTab('browse')}
+            className={`px-4 py-2 rounded-xl font-bold transition-all ${
+              activeSubTab === 'browse'
+                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
+                : 'text-white/50 hover:text-white'
             }`}
           >
-            <span>{cat.icon}</span>
-            <span>{cat.label}</span>
+            Browse Modrinth
           </button>
-        ))}
+          <button
+            onClick={() => setActiveSubTab('installed')}
+            className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${
+              activeSubTab === 'installed'
+                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            <span>Installed</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-white/20 font-mono">
+              {installedMods.length}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* BROWSE SUB-TAB */}
       {activeSubTab === 'browse' ? (
         <div className="space-y-4">
-          {/* Search Bar + Multi-select Action */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+          {/* Search Bar & Smart Filter Controls */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3 rounded-2xl bg-[#0f111c]/80 border border-white/10 backdrop-blur-xl">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400" />
               <input
                 type="text"
-                placeholder={`Search ${activeCategory} on Modrinth...`}
+                placeholder={`Search ${activeCategory} for Minecraft ${activeInstance?.version || '26.4'} (${currentRealVersion})...`}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && fetchContent(query, activeCategory)}
-                className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+                className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-400 transition-colors"
               />
               {query && (
                 <button
@@ -724,20 +719,52 @@ export const ContentsView: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+            {/* Smart Version Lock Filter Indicator */}
+            <button
+              onClick={() => setStrictVersionFilter(!strictVersionFilter)}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                strictVersionFilter
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  : 'bg-white/5 border-white/10 text-white/50 hover:text-white'
+              }`}
+              title="When enabled, only displays and downloads releases matching your selected instance version exactly"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span className="truncate">
+                {strictVersionFilter
+                  ? `Locked to ${activeInstance?.version || '26.4'} (${currentRealVersion})`
+                  : 'All MC Versions'}
+              </span>
+            </button>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center space-x-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/40 hidden sm:inline">
+                Sort:
+              </span>
+              <select
+                value={sortBy}
+                onChange={(e: any) => setSortBy(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-400 cursor-pointer font-medium"
+              >
+                <option value="downloads">Most Downloads</option>
+                <option value="relevance">Relevance</option>
+                <option value="follows">Most Followed</option>
+              </select>
+
               {selectedIds.size > 0 && (
                 <button
                   onClick={handleInstallSelected}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-hover)] text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_var(--color-glow)] flex items-center space-x-2"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)] flex items-center space-x-2 animate-pulse"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Install Selected ({selectedIds.size})</span>
+                  <span>Install ({selectedIds.size})</span>
                 </button>
               )}
 
               <button
                 onClick={() => fetchContent(query, activeCategory)}
-                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white transition-colors"
+                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
                 title="Refresh Content"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -745,207 +772,336 @@ export const ContentsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Items Grid / Loading Skeletons / Empty State */}
+          {/* Cards Grid */}
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3, 4, 5, 6].map((n) => (
                 <div
                   key={n}
-                  className="rounded-2xl glass-panel p-4 border border-white/5 min-h-[170px] flex flex-col justify-between animate-pulse"
+                  className="rounded-2xl bg-[#121422]/60 p-4 border border-white/5 min-h-[180px] flex flex-col justify-between animate-pulse"
                 >
                   <div className="flex items-start space-x-3">
-                    <div className="w-11 h-11 rounded-xl bg-white/10 flex-shrink-0" />
+                    <div className="w-12 h-12 rounded-xl bg-white/10 flex-shrink-0" />
                     <div className="flex-1 space-y-2">
                       <div className="h-4 bg-white/10 rounded w-3/4" />
                       <div className="h-3 bg-white/5 rounded w-1/2" />
                     </div>
                   </div>
-                  <div className="space-y-1.5 my-3">
+                  <div className="space-y-2 my-3">
                     <div className="h-3 bg-white/5 rounded w-full" />
                     <div className="h-3 bg-white/5 rounded w-4/5" />
                   </div>
                   <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-                    <div className="h-3 bg-white/5 rounded w-20" />
-                    <div className="h-7 bg-white/10 rounded-xl w-20" />
+                    <div className="h-3 bg-white/5 rounded w-24" />
+                    <div className="h-8 bg-white/10 rounded-xl w-24" />
                   </div>
                 </div>
               ))}
             </div>
-          ) : items.length > 0 ? (
+          ) : sortedItems.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {items.map((item) => {
-              const isSelected = selectedIds.has(item.id);
-              const isInstalling = installingIds.has(item.id);
+              {sortedItems.map((item) => {
+                const isSelected = selectedIds.has(item.id);
+                const isInstalling = installingIds.has(item.id);
+                const installed = isItemInstalled(item);
+                const compatible = isItemCompatible(item);
 
-              return (
-                <div
-                  key={item.id}
-                  className={`group rounded-2xl glass-panel p-4 border transition-all flex flex-col justify-between min-h-[170px] ${
-                    isSelected
-                      ? 'border-[var(--color-primary-light)] bg-[var(--color-primary)]/10 shadow-[0_0_15px_var(--color-glow)]'
-                      : 'border-white/5 hover:border-[var(--color-border-hover)] hover:bg-white/[0.03]'
-                  }`}
-                >
-                  {/* Top info */}
-                  <div>
-                    <div className="flex items-start justify-between gap-3 mb-2.5">
-                      <div className="flex items-start space-x-3 overflow-hidden">
-                        {item.iconUrl ? (
-                          <img
-                            src={item.iconUrl}
-                            alt={item.title}
-                            className="w-11 h-11 rounded-xl object-cover bg-black/40 flex-shrink-0 border border-white/10"
-                          />
-                        ) : (
-                          <div className="w-11 h-11 rounded-xl bg-[var(--color-primary)]/20 text-[var(--color-primary-light)] flex items-center justify-center font-bold text-lg flex-shrink-0">
-                            {item.title.charAt(0)}
+                return (
+                  <div
+                    key={item.id}
+                    className={`group rounded-2xl p-4 border transition-all flex flex-col justify-between min-h-[184px] backdrop-blur-xl ${
+                      isSelected
+                        ? 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
+                        : 'bg-[#121422]/80 border-white/[0.08] hover:border-cyan-500/30 hover:bg-[#15182a] hover:shadow-lg'
+                    }`}
+                  >
+                    {/* Top Content */}
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-2.5">
+                        <div className="flex items-start space-x-3 overflow-hidden">
+                          {item.iconUrl ? (
+                            <img
+                              src={item.iconUrl}
+                              alt={item.title}
+                              className="w-12 h-12 rounded-2xl object-cover bg-black/40 flex-shrink-0 border border-white/10 shadow-md group-hover:scale-105 transition-transform"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-purple-600/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xl flex-shrink-0">
+                              {item.title.charAt(0)}
+                            </div>
+                          )}
+                          <div className="overflow-hidden">
+                            <h3 className="font-bold text-sm text-white group-hover:text-cyan-300 transition-colors truncate">
+                              {item.title}
+                            </h3>
+                            <div className="text-[11px] text-white/50 truncate">
+                              by <span className="text-white/80 font-medium">{item.author}</span>
+                            </div>
+                            {item.categories && item.categories.length > 0 && (
+                              <div className="flex items-center space-x-1.5 mt-1 overflow-hidden">
+                                {item.categories.slice(0, 2).map((cat) => (
+                                  <span
+                                    key={cat}
+                                    className="px-1.5 py-0.2 rounded-md text-[9px] font-mono uppercase bg-white/5 text-white/60 border border-white/5 truncate"
+                                  >
+                                    {cat}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        <div className="overflow-hidden">
-                          <h3 className="font-bold text-sm text-white group-hover:text-[var(--color-primary-light)] transition-colors truncate">
-                            {item.title}
-                          </h3>
-                          <div className="text-[11px] text-[var(--color-text-muted)] truncate">
-                            by <span className="text-white/80 font-medium">{item.author}</span>
-                          </div>
+                        </div>
+
+                        {/* Multi-Select Checkbox */}
+                        <button
+                          onClick={() => toggleSelect(item.id)}
+                          className="text-white/30 hover:text-white p-1"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-cyan-400" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-white/60 line-clamp-2 leading-relaxed mb-3">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* Compatibility & Install Deck */}
+                    <div className="pt-3 border-t border-white/5 space-y-2.5">
+                      {/* Compatibility indicator */}
+                      <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center space-x-1.5">
+                          {compatible ? (
+                            <span className="flex items-center space-x-1 text-emerald-400 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+                              <span>Verified {activeInstance?.version || '26.4'}</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center space-x-1 text-amber-400 font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              <span>Check compatibility</span>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-white/40 font-mono">
+                          {(item.downloads / 1000000).toFixed(1)}M dl
                         </div>
                       </div>
 
-                      {/* Checkbox for multi-select */}
-                      <button
-                        onClick={() => toggleSelect(item.id)}
-                        className="text-white/40 hover:text-white p-1"
-                      >
-                        {isSelected ? (
-                          <CheckSquare className="w-4 h-4 text-[var(--color-primary-light)]" />
+                      {/* Button Action */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-white/40">
+                          {activeInstance?.name || 'Instance'}
+                        </span>
+
+                        {installed ? (
+                          <button
+                            onClick={() => setActiveSubTab('installed')}
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Installed</span>
+                          </button>
                         ) : (
-                          <Square className="w-4 h-4" />
+                          <button
+                            onClick={() => handleInstallSingle(item)}
+                            disabled={isInstalling}
+                            className={`px-4 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-all shadow-md ${
+                              isInstalling
+                                ? 'bg-amber-600/70 text-white cursor-wait'
+                                : 'bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-[1.02]'
+                            }`}
+                          >
+                            {isInstalling ? (
+                              <>
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Installing</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Install ➔</span>
+                              </>
+                            )}
+                          </button>
                         )}
-                      </button>
+                      </div>
                     </div>
-
-                    <p className="text-[11px] text-[var(--color-text-muted)] line-clamp-2 leading-relaxed mb-3">
-                      {item.description}
-                    </p>
                   </div>
-
-                  {/* Bottom Stats & Install Button */}
-                  <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
-                    <div className="flex items-center space-x-2 text-[var(--color-text-muted)]">
-                      <span>{(item.downloads / 1000).toFixed(0)}k dl</span>
-                      <span>•</span>
-                      <span>{item.follows} ♥</span>
-                    </div>
-
-                    <button
-                      onClick={() => handleInstallSingle(item)}
-                      disabled={isInstalling}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-all shadow-sm ${
-                        isInstalling
-                          ? 'bg-amber-600/60 text-white cursor-wait'
-                          : 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white hover:shadow-[0_0_12px_var(--color-glow)]'
-                      }`}
-                    >
-                      {isInstalling ? (
-                        <>
-                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Installing</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Install</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 glass-panel rounded-2xl border border-white/5 p-8">
-              <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-2xl shadow-inner">
+            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4 rounded-3xl bg-[#121422]/60 border border-white/5 p-8 backdrop-blur-xl">
+              <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-3xl shadow-inner">
                 {categories.find((c) => c.id === activeCategory)?.icon || '🔍'}
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-lg font-bold text-white">
                   No {categories.find((c) => c.id === activeCategory)?.label || 'content'} found
                 </h3>
-                <p className="text-xs text-[var(--color-text-muted)] max-w-sm mt-1">
+                <p className="text-xs text-white/50 max-w-sm mt-1">
                   {query
-                    ? `No results found matching "${query}". Try searching with different keywords.`
+                    ? `No releases found matching "${query}" for Minecraft ${activeInstance?.version || '26.4'}. Try relaxing the version filter or search query.`
                     : `No items available for this selection.`}
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setQuery('');
-                  fetchContent('', activeCategory);
-                }}
-                className="px-5 py-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-xs font-bold transition-all shadow-[0_0_15px_var(--color-glow)]"
-              >
-                Browse Popular {categories.find((c) => c.id === activeCategory)?.label}
-              </button>
+              <div className="flex items-center space-x-3">
+                {strictVersionFilter && (
+                  <button
+                    onClick={() => setStrictVersionFilter(false)}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold transition-all border border-white/10"
+                  >
+                    Disable Version Lock
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setQuery('');
+                    fetchContent('', activeCategory);
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.35)]"
+                >
+                  Browse Popular {categories.find((c) => c.id === activeCategory)?.label}
+                </button>
+              </div>
             </div>
           )}
         </div>
       ) : (
         /* INSTALLED SUB-TAB */
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Installed files in {activeInstance?.name || 'Selected Instance'}
-            </h3>
-            <button
-              onClick={loadInstalled}
-              className="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-white flex items-center space-x-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh</span>
-            </button>
+          {/* Header Stats Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-[#121422]/80 border border-white/10 backdrop-blur-xl flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-white/40">Active Category</div>
+                <div className="text-sm font-bold text-white capitalize">{activeCategory}</div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#121422]/80 border border-white/10 backdrop-blur-xl flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-white/40">Installed Items</div>
+                <div className="text-sm font-bold text-white">{installedMods.length} Files Active</div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[#121422]/80 border border-white/10 backdrop-blur-xl flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <HardDrive className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase font-bold text-white/40">Total Disk Size</div>
+                <div className="text-sm font-bold text-white">{totalInstalledSizeMB} MB</div>
+              </div>
+            </div>
           </div>
 
-          {installedMods.length > 0 ? (
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-2xl bg-[#0f111c]/80 border border-white/10 backdrop-blur-xl">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <input
+                type="text"
+                placeholder="Filter installed files..."
+                value={installedSearch}
+                onChange={(e) => setInstalledSearch(e.target.value)}
+                className="w-full pl-10 pr-9 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-400 transition-colors"
+              />
+              {installedSearch && (
+                <button
+                  onClick={() => setInstalledSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {activeInstance && (
+                <button
+                  onClick={() => openFolder(activeInstance.id, activeCategory)}
+                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white flex items-center space-x-1.5 transition-colors"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Open Directory</span>
+                </button>
+              )}
+              <button
+                onClick={loadInstalled}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-colors"
+                title="Refresh Installed"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Installed Items List */}
+          {filteredInstalledMods.length > 0 ? (
             <div className="space-y-2">
-              {installedMods.map((mod) => (
+              {filteredInstalledMods.map((mod) => (
                 <div
                   key={mod.fileName}
-                  className={`flex items-center justify-between p-3.5 rounded-2xl glass-panel border transition-all ${
-                    mod.enabled ? 'border-white/10' : 'border-white/5 opacity-50 bg-black/40'
+                  className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all backdrop-blur-xl ${
+                    mod.enabled
+                      ? 'bg-[#121422]/90 border-white/10 hover:border-cyan-500/30'
+                      : 'bg-[#0b0c14]/60 border-white/5 opacity-55'
                   }`}
                 >
-                  <div className="flex items-center space-x-3 truncate">
+                  <div className="flex items-center space-x-3.5 truncate">
                     <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        mod.enabled ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-neutral-600'
+                      className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                        mod.enabled
+                          ? 'bg-emerald-400 shadow-[0_0_10px_#34d399]'
+                          : 'bg-neutral-600'
                       }`}
                     />
                     <div className="truncate">
-                      <div className="font-bold text-xs text-white truncate">{mod.name}</div>
-                      <div className="text-[10px] font-mono text-[var(--color-text-muted)] truncate">
-                        {mod.fileName} ({(mod.size / 1024 / 1024).toFixed(2)} MB)
+                      <div className="font-bold text-xs text-white truncate flex items-center space-x-2">
+                        <span>{mod.name}</span>
+                        {mod.version && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-white/10 text-white/60">
+                            v{mod.version}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-mono text-white/40 truncate mt-0.5">
+                        {mod.fileName} • {(mod.size / 1024 / 1024).toFixed(2)} MB
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-shrink-0">
                     <button
                       onClick={() => toggleModState(mod)}
-                      className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all ${
                         mod.enabled
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
                           : 'bg-white/5 text-white/50 border border-white/10 hover:text-white'
                       }`}
-                      title={mod.enabled ? 'Disable Mod' : 'Enable Mod'}
+                      title={mod.enabled ? 'Click to Disable' : 'Click to Enable'}
                     >
-                      <Power className="w-3 h-3" />
+                      <Power className="w-3.5 h-3.5" />
                       <span>{mod.enabled ? 'Enabled' : 'Disabled'}</span>
                     </button>
                     <button
                       onClick={() => deleteModFile(mod)}
-                      className="p-1.5 rounded-xl hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition-colors"
-                      title="Delete Mod File"
+                      className="p-2 rounded-xl hover:bg-rose-500/20 text-white/40 hover:text-rose-400 transition-colors border border-transparent hover:border-rose-500/30"
+                      title="Delete File from Instance"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -954,15 +1110,15 @@ export const ContentsView: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="p-16 rounded-3xl glass-panel text-center flex flex-col items-center justify-center border border-dashed border-white/10">
-              <Package className="w-12 h-12 text-white/20 mb-3" />
+            <div className="p-16 rounded-3xl bg-[#121422]/60 text-center flex flex-col items-center justify-center border border-dashed border-white/10 backdrop-blur-xl">
+              <Package className="w-14 h-14 text-white/20 mb-3" />
               <h4 className="font-bold text-sm text-white">No Installed {activeCategory}</h4>
-              <p className="text-xs text-[var(--color-text-muted)] mt-1 mb-4">
-                You haven't installed any {activeCategory} in "{activeInstance?.name}" yet.
+              <p className="text-xs text-white/50 mt-1 mb-5 max-w-sm">
+                You haven't installed any {activeCategory} in "{activeInstance?.name || 'Selected Instance'}" yet.
               </p>
               <button
                 onClick={() => setActiveSubTab('browse')}
-                className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white text-xs font-bold uppercase tracking-wider"
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.35)]"
               >
                 Browse & Install Now
               </button>

@@ -33,10 +33,11 @@ export class ModrinthManager {
         facets.push([`categories:${options.loader}`]);
       }
 
-      // Version filter (only if requested and not custom/snapshot e.g. 26.x which do not exist on Modrinth)
+      // Version filter (resolve custom versions like 26.4/26.3 -> 1.21.4 for Modrinth)
       if (includeVersion && options.gameVersion) {
-        if (!options.gameVersion.startsWith('26.')) {
-          facets.push([`versions:${options.gameVersion}`]);
+        const realVer = this.resolveRealVersion(options.gameVersion);
+        if (realVer) {
+          facets.push([`versions:${realVer}`]);
         }
       }
 
@@ -91,34 +92,38 @@ export class ModrinthManager {
     return { hits: [], total_hits: 0 };
   }
 
+  public resolveRealVersion(version?: string): string | undefined {
+    if (!version) return undefined;
+    const v = version.trim();
+    if (v.startsWith('26.') || v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
+    if (v === '1.20.8' || v === '1.20') return '1.20.4';
+    if (v === '1.8') return '1.8.9';
+    return v;
+  }
+
   public async getVersions(idOrSlug: string, loaders?: string[], gameVersions?: string[]): Promise<any[]> {
     const params = new URLSearchParams();
-    if (loaders && loaders.length > 0) params.append('loaders', JSON.stringify(loaders));
+    if (loaders && loaders.length > 0) {
+      params.append('loaders', JSON.stringify(loaders.map((l) => l.toLowerCase())));
+    }
     if (gameVersions && gameVersions.length > 0) {
-      // Skip custom versions like 26.x
-      const validVersions = gameVersions.filter(v => !v.startsWith('26.'));
-      if (validVersions.length > 0) {
-        params.append('game_versions', JSON.stringify(validVersions));
+      const mapped = Array.from(new Set(gameVersions.map((v) => this.resolveRealVersion(v) || v).filter(Boolean)));
+      if (mapped.length > 0) {
+        params.append('game_versions', JSON.stringify(mapped));
       }
     }
 
     try {
       const res = await fetch(`https://api.modrinth.com/v2/project/${idOrSlug}/version?${params.toString()}`, {
-        headers: { 'User-Agent': 'VictusClient/1.0.0 (contact@victusclient.net)' }
+        headers: { 'User-Agent': 'VictusClient/1.0.0 (contact@victusclient.net)' },
       });
       if (res.ok) {
         const list = (await res.json()) as any[];
         if (list && list.length > 0) return list;
       }
-
-      // Fallback: If filtered versions returned empty, fetch all available versions for this project
-      const fallbackRes = await fetch(`https://api.modrinth.com/v2/project/${idOrSlug}/version`, {
-        headers: { 'User-Agent': 'VictusClient/1.0.0 (contact@victusclient.net)' }
-      });
-      if (fallbackRes.ok) {
-        return (await fallbackRes.json()) as any[];
-      }
-    } catch {}
+    } catch (e) {
+      console.error('Error fetching filtered Modrinth versions:', e);
+    }
     return [];
   }
 
