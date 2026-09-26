@@ -1,10 +1,17 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import https from 'https';
+import http from 'http';
+import dns from 'dns';
 import { spawn, ChildProcess } from 'child_process';
 import AdmZip from 'adm-zip';
 import { VersionManager } from './VersionManager';
 import { JavaManager } from './JavaManager';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 
 export interface LaunchCallbacks {
   onProgress: (data: { instanceId: string; status: string; percent: number; message: string }) => void;
@@ -48,8 +55,12 @@ export class MinecraftLauncher {
   }
 
   private normalizeUuid(uuidStr?: string, username = 'VictusPlayer'): string {
-    if (uuidStr && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuidStr)) {
-      return uuidStr.toLowerCase();
+    if (uuidStr) {
+      const clean = uuidStr.replace(/-/g, '').trim().toLowerCase();
+      if (/^[0-9a-f]{32}$/.test(clean)) {
+        return `${clean.slice(0, 8)}-${clean.slice(8, 12)}-${clean.slice(12, 16)}-${clean.slice(16, 20)}-${clean.slice(20, 32)}`;
+      }
+      return uuidStr;
     }
     // Compute standard offline Minecraft UUID (version 3 MD5)
     const hash = crypto.createHash('md5').update('OfflinePlayer:' + username).digest();
@@ -83,8 +94,8 @@ export class MinecraftLauncher {
         message: `Verifying ${essentialEntries.length} core game assets...`,
       });
 
-      // Concurrent downloader with pool of 25 workers
-      const concurrency = 25;
+      // Concurrent downloader with pool of 12 workers
+      const concurrency = 12;
       let currentIndex = 0;
       const worker = async () => {
         while (currentIndex < essentialEntries.length) {
@@ -92,7 +103,7 @@ export class MinecraftLauncher {
           const hash = obj.hash;
           const sub = hash.slice(0, 2);
           const dest = path.join(this.assetsDir, 'objects', sub, hash);
-          if (fs.existsSync(dest)) continue;
+          if (fs.existsSync(dest) && fs.statSync(dest).size > 0) continue;
 
           try {
             const url = `https://resources.download.minecraft.net/${sub}/${hash}`;
@@ -124,13 +135,15 @@ export class MinecraftLauncher {
         message: `[VictusClient] Preparing launch for "${instance.name}" (${instance.version} - ${instance.loader})`,
       });
 
+      const realVersion = this.versionManager.resolveRealGameVersion(instance.version);
+
       // 1. Resolve Version JSON
       const versionJson = await this.versionManager.getVersionJson(instance.version);
 
       // 2. Resolve Client Jar
       const clientDownload = versionJson.downloads?.client;
       const versionJarPath = path.join(this.versionsDir, instance.version, `${instance.version}.jar`);
-      if (clientDownload && !fs.existsSync(versionJarPath)) {
+      if (clientDownload && (!fs.existsSync(versionJarPath) || fs.statSync(versionJarPath).size === 0)) {
         callbacks.onProgress({ instanceId: id, status: 'downloading', percent: 15, message: 'Downloading Minecraft client.jar...' });
         await this.downloadFile(clientDownload.url, versionJarPath);
       }
@@ -149,26 +162,54 @@ export class MinecraftLauncher {
       if (isFabric || isQuilt) {
         callbacks.onProgress({ instanceId: id, status: 'downloading', percent: 35, message: `Resolving ${instance.loader.toUpperCase()} loader libraries...` });
         try {
-          const rawVersion = instance.loaderVersion || (isFabric ? '0.16.9' : '0.27.1');
-          const cleanLoaderVer = rawVersion.match(/[0-9.]+/)?.[0] || (isFabric ? '0.16.9' : '0.27.1');
-          const metaUrl = isFabric
-            ? `https://meta.fabricmc.net/v2/versions/loader/${instance.version}/${cleanLoaderVer}/profile/json`
-            : `https://meta.quiltmc.org/v3/versions/loader/${instance.version}/${cleanLoaderVer}/profile/json`;
+          let rawVersion = instance.loaderVersion || (isFabric ? '0.19.5' : '0.27.1');
+          if (isFabric && (rawVersion.includes('0.16.9') || rawVersion.startsWith('0.16'))) {
+            rawVersion = '0.19.5';
+          }
+          const cleanLoaderVer = rawVersion.match(/[0-9.]+/)?.[0] || (isFabric ? '0.19.5' : '0.27.1');
+          
+          // Try with realVersion first (e.g. 1.21.4 for 26.3), then fallback to instance.version
+          let profile: any = null;
+          const versionsToTry = [realVersion];
+          if (instance.version !== realVersion) versionsToTry.push(instance.version);
 
-          const res = await fetch(metaUrl);
-          if (res.ok) {
-            const profile = (await res.json()) as any;
+          for (const vToTry of versionsToTry) {
+            const metaUrl = isFabric
+              ? `https://meta.fabricmc.net/v2/versions/loader/${vToTry}/${cleanLoaderVer}/profile/json`
+              : `https://meta.quiltmc.org/v3/versions/loader/${vToTry}/${cleanLoaderVer}/profile/json`;
+
+            try {
+              const res = await fetch(metaUrl);
+              if (res.ok) {
+                profile = (await res.json()) as any;
+                break;
+              }
+            } catch {}
+          }
+
+          if (profile) {
             if (profile.mainClass) mainClass = profile.mainClass;
 
             const loaderLibs = profile.libraries || [];
             for (const lib of loaderLibs) {
               const relPath = this.mavenToPath(lib.name);
               const dest = path.join(this.librariesDir, relPath);
-              if (!fs.existsSync(dest)) {
+              if (!fs.existsSync(dest) || fs.statSync(dest).size === 0) {
                 const base = lib.url || (isFabric ? 'https://maven.fabricmc.net/' : 'https://maven.quiltmc.org/repository/release/');
-                await this.downloadFile(base + relPath, dest);
+                try {
+                  await this.downloadFile(base + relPath, dest);
+                } catch (e: any) {
+                  callbacks.onLog({
+                    id: `log-${Date.now()}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    level: 'warn',
+                    message: `Notice resolving loader lib ${lib.name}: ${e.message}`,
+                  });
+                }
               }
-              classpathFiles.push(dest);
+              if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
+                classpathFiles.push(dest);
+              }
             }
           }
         } catch (loaderErr: any) {
@@ -192,10 +233,21 @@ export class MinecraftLauncher {
         if (lib.downloads?.artifact) {
           const artifact = lib.downloads.artifact;
           const libPath = path.join(this.librariesDir, artifact.path || `${lib.name.replace(/:/g, '/')}.jar`);
-          if (!fs.existsSync(libPath)) {
-            await this.downloadFile(artifact.url, libPath);
+          if (!fs.existsSync(libPath) || fs.statSync(libPath).size === 0) {
+            try {
+              await this.downloadFile(artifact.url, libPath);
+            } catch (dlErr: any) {
+              callbacks.onLog({
+                id: `log-${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString(),
+                level: 'warn',
+                message: `Notice downloading library ${lib.name}: ${dlErr.message}`,
+              });
+            }
           }
-          classpathFiles.push(libPath);
+          if (fs.existsSync(libPath) && fs.statSync(libPath).size > 0) {
+            classpathFiles.push(libPath);
+          }
         }
 
         // Natives classifiers (e.g. natives-windows)
@@ -203,18 +255,29 @@ export class MinecraftLauncher {
         if (classifiers && classifiers['natives-windows']) {
           const nativeArtifact = classifiers['natives-windows'];
           const nativeZip = path.join(this.librariesDir, nativeArtifact.path);
-          if (!fs.existsSync(nativeZip)) {
-            await this.downloadFile(nativeArtifact.url, nativeZip);
+          if (!fs.existsSync(nativeZip) || fs.statSync(nativeZip).size === 0) {
+            try {
+              await this.downloadFile(nativeArtifact.url, nativeZip);
+            } catch (dlErr: any) {
+              callbacks.onLog({
+                id: `log-${Date.now()}`,
+                timestamp: new Date().toLocaleTimeString(),
+                level: 'warn',
+                message: `Notice downloading native ${lib.name}: ${dlErr.message}`,
+              });
+            }
           }
           // Extract DLLs
-          try {
-            const zip = new AdmZip(nativeZip);
-            zip.getEntries().forEach((entry) => {
-              if (entry.entryName.endsWith('.dll') && !entry.entryName.startsWith('META-INF')) {
-                fs.writeFileSync(path.join(nativesDir, path.basename(entry.entryName)), entry.getData());
-              }
-            });
-          } catch {}
+          if (fs.existsSync(nativeZip) && fs.statSync(nativeZip).size > 0) {
+            try {
+              const zip = new AdmZip(nativeZip);
+              zip.getEntries().forEach((entry) => {
+                if (entry.entryName.endsWith('.dll') && !entry.entryName.startsWith('META-INF')) {
+                  fs.writeFileSync(path.join(nativesDir, path.basename(entry.entryName)), entry.getData());
+                }
+              });
+            } catch {}
+          }
         }
       }
 
@@ -250,18 +313,19 @@ export class MinecraftLauncher {
         `-Dio.netty.native.workdir=${nativesDir}`,
         `-Dminecraft.launcher.brand=VictusClient`,
         `-Dminecraft.launcher.version=1.0.0`,
-        `-cp`,
-        classpath,
       ];
 
       if (instance.jvmArgs) {
         jvmArgs.push(...instance.jvmArgs.split(' ').filter(Boolean));
       }
 
+      jvmArgs.push('-cp', classpath);
+
       // 8. Game Arguments
       const username = account?.username || 'VictusPlayer';
       const uuid = this.normalizeUuid(account?.uuid, username);
       const token = account?.accessToken || 'victus_token';
+      const isMsa = account?.type === 'microsoft';
 
       const gameArgs = [
         '--username', username,
@@ -271,9 +335,13 @@ export class MinecraftLauncher {
         '--assetIndex', versionJson.assetIndex?.id || instance.version,
         '--uuid', uuid,
         '--accessToken', token,
-        '--userType', 'mojang',
+        '--userType', isMsa ? 'msa' : 'mojang',
         '--versionType', 'VictusClient',
       ];
+
+      if (isMsa) {
+        gameArgs.push('--userProperties', '{}');
+      }
 
       if (instance.resolution) {
         gameArgs.push('--width', String(instance.resolution.width || 1280));
@@ -385,13 +453,108 @@ export class MinecraftLauncher {
     return allowed;
   }
 
-  private async downloadFile(url: string, destPath: string): Promise<void> {
+  private async downloadFile(url: string, destPath: string, retries = 3): Promise<void> {
     const dir = path.dirname(destPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${url}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    fs.writeFileSync(destPath, buffer);
+    let lastError: any;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tempPath = `${destPath}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const file = fs.createWriteStream(tempPath);
+          let finished = false;
+
+          const cleanup = () => {
+            try {
+              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+            } catch {}
+          };
+
+          const request = (targetUrl: string, redirectCount = 0) => {
+            if (redirectCount > 5) {
+              file.destroy();
+              cleanup();
+              return reject(new Error(`Too many redirects for ${url}`));
+            }
+
+            const client = targetUrl.startsWith('https') ? https : http;
+            const req = client.get(
+              targetUrl,
+              {
+                family: 4,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) VictusClient/1.0',
+                  'Connection': 'close',
+                  'Accept': '*/*',
+                },
+                timeout: 45000,
+              },
+              (res) => {
+                if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                  file.destroy();
+                  cleanup();
+                  const redirectUrl = new URL(res.headers.location, targetUrl).toString();
+                  return request(redirectUrl, redirectCount + 1);
+                }
+
+                if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+                  file.destroy();
+                  cleanup();
+                  return reject(new Error(`HTTP ${res.statusCode || 0} downloading ${targetUrl}`));
+                }
+
+                res.pipe(file);
+
+                file.on('close', () => {
+                  if (finished) return;
+                  finished = true;
+                  try {
+                    fs.copyFileSync(tempPath, destPath);
+                    cleanup();
+                    resolve();
+                  } catch (e) {
+                    cleanup();
+                    reject(e);
+                  }
+                });
+
+                file.on('error', (fileErr) => {
+                  if (finished) return;
+                  finished = true;
+                  file.destroy();
+                  cleanup();
+                  reject(fileErr);
+                });
+              }
+            );
+
+            req.on('timeout', () => {
+              req.destroy(new Error('Request timed out'));
+            });
+
+            req.on('error', (err) => {
+              if (finished) return;
+              finished = true;
+              file.destroy();
+              cleanup();
+              reject(err);
+            });
+          };
+
+          request(url);
+        });
+
+        // Download succeeded
+        return;
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+        }
+      }
+    }
+
+    throw lastError || new Error(`Failed to download ${url}`);
   }
 }

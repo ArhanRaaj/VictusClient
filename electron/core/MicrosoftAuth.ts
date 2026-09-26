@@ -110,6 +110,83 @@ export class MicrosoftAuthManager {
   }
 
   /**
+   * Refreshes Minecraft session token if it is nearing expiry
+   */
+  public async validateOrRefreshToken(account: MicrosoftAccount): Promise<MicrosoftAccount> {
+    if (!account.refreshToken) {
+      return account;
+    }
+
+    // Refresh if expiring within 15 minutes or already expired
+    const isExpiring = !account.expiresAt || Date.now() >= account.expiresAt - 15 * 60 * 1000;
+    if (!isExpiring) {
+      return account;
+    }
+
+    try {
+      console.log('[MicrosoftAuth] Refreshing Minecraft session token...');
+      const msTokenData = await this.postForm('https://login.live.com/oauth20_token.srf', {
+        client_id: this.clientId,
+        refresh_token: account.refreshToken,
+        grant_type: 'refresh_token',
+        redirect_uri: this.redirectUri,
+        scope: this.scope,
+      });
+
+      if (!msTokenData?.access_token) {
+        return account;
+      }
+
+      const msAccessToken = msTokenData.access_token;
+      const newRefreshToken = msTokenData.refresh_token || account.refreshToken;
+
+      let xblData = await this.callXboxAuthenticate(msAccessToken, true);
+      if (!xblData?.Token) {
+        xblData = await this.callXboxAuthenticate(msAccessToken, false);
+      }
+      if (!xblData?.Token || !xblData?.DisplayClaims?.xui?.[0]?.uhs) return account;
+
+      const xblToken = xblData.Token;
+      const userHash = xblData.DisplayClaims.xui[0].uhs;
+
+      const xstsData = await this.postJson(
+        'https://xsts.auth.xboxlive.com/xsts/authorize',
+        {
+          Properties: {
+            SandboxId: 'RETAIL',
+            UserTokens: [xblToken],
+          },
+          RelyingParty: 'rp://api.minecraftservices.com/',
+          TokenType: 'JWT',
+        },
+        {
+          'x-xbl-contract-version': '1',
+        }
+      );
+
+      if (!xstsData?.Token) return account;
+
+      const mcAuthData = await this.postJson('https://api.minecraftservices.com/authentication/login_with_xbox', {
+        identityToken: `XBL3.0 x=${userHash};${xstsData.Token}`,
+      });
+
+      if (!mcAuthData?.access_token) return account;
+
+      console.log('[MicrosoftAuth] Successfully refreshed session token for @' + account.username);
+
+      return {
+        ...account,
+        accessToken: mcAuthData.access_token,
+        refreshToken: newRefreshToken,
+        expiresAt: Date.now() + (mcAuthData.expires_in || 86400) * 1000,
+      };
+    } catch (e) {
+      console.warn('[MicrosoftAuth] Token refresh failed, keeping existing token:', e);
+      return account;
+    }
+  }
+
+  /**
    * Exchanges authorization code through Microsoft -> XBL -> XSTS -> Minecraft Services
    */
   private async exchangeCodeForMinecraft(code: string): Promise<MicrosoftAccount> {

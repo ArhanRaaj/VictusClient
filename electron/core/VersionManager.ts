@@ -55,6 +55,14 @@ export class VersionManager {
     };
   }
 
+  public resolveRealGameVersion(versionId: string): string {
+    const v = (versionId || '').trim();
+    if (v.startsWith('26.') || v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
+    if (v === '1.20.8' || v === '1.20') return '1.20.4';
+    if (v === '1.8') return '1.8.9';
+    return v || '1.21.4';
+  }
+
   public async getVersionJson(versionId: string): Promise<any> {
     const versionFile = path.join(this.versionsDir, versionId, `${versionId}.json`);
     if (fs.existsSync(versionFile)) {
@@ -62,7 +70,12 @@ export class VersionManager {
     }
 
     const manifest = await this.getManifest();
-    const entry = manifest.versions.find((v) => v.id === versionId);
+    let entry = manifest.versions.find((v) => v.id === versionId);
+    if (!entry || !entry.url) {
+      const realVer = this.resolveRealGameVersion(versionId);
+      entry = manifest.versions.find((v) => v.id === realVer);
+    }
+
     if (!entry || !entry.url) {
       throw new Error(`Minecraft version ${versionId} not found in official manifest`);
     }
@@ -78,15 +91,20 @@ export class VersionManager {
   }
 
   public async getLoaderVersions(loader: string, gameVersion: string): Promise<any[]> {
+    const realVer = this.resolveRealGameVersion(gameVersion);
     if (loader === 'fabric') {
       try {
-        const res = await fetch(`https://meta.fabricmc.net/v2/versions/loader/${gameVersion}`);
+        const res = await fetch(`https://meta.fabricmc.net/v2/versions/loader/${realVer}`);
         if (res.ok) return (await res.json()) as any[];
       } catch {}
-      return [{ loader: { version: '0.16.9', stable: true } }];
+      try {
+        const res = await fetch(`https://meta.fabricmc.net/v2/versions/loader`);
+        if (res.ok) return (await res.json()) as any[];
+      } catch {}
+      return [{ loader: { version: '0.19.5', stable: true } }];
     } else if (loader === 'quilt') {
       try {
-        const res = await fetch(`https://meta.quiltmc.org/v3/versions/loader/${gameVersion}`);
+        const res = await fetch(`https://meta.quiltmc.org/v3/versions/loader/${realVer}`);
         if (res.ok) return (await res.json()) as any[];
       } catch {}
       return [{ loader: { version: '0.27.1', stable: true } }];

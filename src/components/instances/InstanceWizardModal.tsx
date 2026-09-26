@@ -87,7 +87,7 @@ export const InstanceWizardModal: React.FC<InstanceWizardModalProps> = ({ isOpen
   const [hasCustomName, setHasCustomName] = useState(false);
   const [mcVersion, setMcVersion] = useState<string>(DEFAULT_VERSION);
   const [loader, setLoader] = useState<ModLoader>('fabric');
-  const [loaderVersion, setLoaderVersion] = useState('0.16.9 (Latest)');
+  const [loaderVersion, setLoaderVersion] = useState('0.19.5 (Latest)');
   const [ramMax, setRamMax] = useState(4096);
   const [ramMin, setRamMin] = useState(2048);
   const [icon, setIcon] = useState('⚡');
@@ -351,9 +351,8 @@ export const InstanceWizardModal: React.FC<InstanceWizardModalProps> = ({ isOpen
                 >
                   {loader === 'fabric' && (
                     <>
-                      <option value="0.16.9 (Latest)">0.16.9 (Latest Stable)</option>
-                      <option value="0.16.8">0.16.8</option>
-                      <option value="0.16.7">0.16.7</option>
+                      <option value="0.19.5 (Latest)">0.19.5 (Latest Stable)</option>
+                      <option value="0.16.9">0.16.9</option>
                     </>
                   )}
                   {loader === 'neoforge' && (

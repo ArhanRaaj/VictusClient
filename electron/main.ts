@@ -2,6 +2,12 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import dns from 'dns';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
 import { ConfigManager } from './core/ConfigManager';
 import { JavaManager } from './core/JavaManager';
 import { VersionManager } from './core/VersionManager';
@@ -152,7 +158,18 @@ ipcMain.handle('minecraft-launch', async (_, instanceId) => {
   if (!instance) return { success: false, error: 'Instance not found' };
 
   const accounts = configManager.loadAccounts();
-  const activeAccount = accounts.find((a) => a.isActive) || accounts[0];
+  let activeAccount = accounts.find((a) => a.isActive) || accounts[0];
+
+  if (activeAccount && activeAccount.type === 'microsoft') {
+    try {
+      activeAccount = (await msAuth.validateOrRefreshToken(activeAccount as any)) as any;
+      const existingIdx = accounts.findIndex((a) => a.id === activeAccount.id);
+      if (existingIdx >= 0) accounts[existingIdx] = activeAccount;
+      configManager.saveAccounts(accounts);
+    } catch (e) {
+      console.warn('[MinecraftLaunch] Token refresh warning:', e);
+    }
+  }
 
   return launcher.launch(instance, activeAccount, {
     onProgress: (p) => mainWindow?.webContents.send('minecraft-progress', p),

@@ -115,7 +115,7 @@ export class ConfigManager {
             name: 'Victus Modded 1.21.4',
             version: '1.21.4',
             loader: 'fabric',
-            loaderVersion: '0.16.9',
+            loaderVersion: '0.19.5',
             ramMin: 2048,
             ramMax: 6144,
             status: 'idle',
