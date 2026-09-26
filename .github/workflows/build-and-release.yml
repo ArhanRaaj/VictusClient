@@ -39,6 +39,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
 
+      - name: Build Lightweight Modern Installer (< 20MB)
+        run: node scripts/build-installer.js
+
       - name: Determine Release Tag
         id: vars
         shell: bash
@@ -69,6 +72,7 @@ jobs:
             release/*.exe
             release/*.yml
             release/*.blockmap
+            release/app-asar.zip
           draft: false
           prerelease: false
           generate_release_notes: true
