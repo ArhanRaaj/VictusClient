@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Tray, Menu } from 'electron';
+import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
@@ -72,8 +73,59 @@ function createWindow() {
   });
 }
 
+let tray: Tray | null = null;
+
+function initTray() {
+  if (tray) return;
+  const iconPath = path.join(__dirname, '../public/icon.png');
+  if (!fs.existsSync(iconPath)) return;
+
+  try {
+    tray = new Tray(iconPath);
+    const updateTray = () => {
+      const runningCount = launcher.getActiveProcessCount();
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: 'Open VictusClient',
+          click: () => {
+            if (mainWindow) {
+              mainWindow.show();
+              mainWindow.focus();
+            }
+          },
+        },
+        {
+          label: runningCount > 0 ? `Minecraft Running (${runningCount} active)` : 'No Games Running',
+          enabled: false,
+        },
+        { type: 'separator' },
+        {
+          label: 'Quit VictusClient',
+          click: () => {
+            launcher.detachAllForQuit();
+            app.quit();
+          },
+        },
+      ]);
+      tray?.setContextMenu(contextMenu);
+    };
+
+    updateTray();
+    tray.setToolTip('VictusClient');
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (err) {
+    console.warn('[Tray] Notice initializing tray:', err);
+  }
+}
+
 app.whenReady().then(() => {
   createWindow();
+  initTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -102,7 +154,15 @@ app.whenReady().then(() => {
   }, 25 * 60 * 1000);
 });
 
+app.on('before-quit', () => {
+  launcher.detachAllForQuit();
+});
+
 app.on('window-all-closed', () => {
+  // If Minecraft is currently running in background, keep process alive so game never gets killed
+  if (launcher.getActiveProcessCount() > 0) {
+    return;
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -112,7 +172,16 @@ ipcMain.on('window-maximize', () => {
   if (mainWindow?.isMaximized()) mainWindow.unmaximize();
   else mainWindow?.maximize();
 });
-ipcMain.on('window-close', () => mainWindow?.close());
+ipcMain.on('window-close', () => {
+  // If Minecraft is currently running, hide to background/tray instead of terminating the process
+  if (launcher.getActiveProcessCount() > 0) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.hide();
+      return;
+    }
+  }
+  mainWindow?.close();
+});
 ipcMain.handle('window-is-maximized', () => mainWindow?.isMaximized() || false);
 
 // Instance IPC
@@ -176,7 +245,13 @@ ipcMain.handle('minecraft-launch', async (_, instanceId) => {
   return launcher.launch(instance, activeAccount, {
     onProgress: (p) => mainWindow?.webContents.send('minecraft-progress', p),
     onLog: (l) => mainWindow?.webContents.send('minecraft-log', l),
-    onExit: (e) => mainWindow?.webContents.send('minecraft-exit', e),
+    onExit: (e) => {
+      mainWindow?.webContents.send('minecraft-exit', e);
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    },
   });
 });
 

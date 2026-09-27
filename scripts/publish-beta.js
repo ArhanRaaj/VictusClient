@@ -20,8 +20,16 @@ const TAG = 'v1.1.0-beta.1';
 const TITLE = 'VictusClient v1.1.0-beta.1 (Core Beta Release)';
 const BODY = `## What's Changed in VictusClient v1.1.0-beta.1 (Beta Release) 🚀
 
+### 🎮 Independent Game Execution & Tray Integration
+- **Game Never Closes with Launcher**: Minecraft processes now run detached in their own process group with native \`javaw.exe\` preference. Closing the launcher window never terminates your running Minecraft instances.
+- **Background System Tray**: Added system tray management with active game indicators, double-click window restore, and automatic re-focusing when games exit.
+
+### 💎 Next-Gen Glassmorphic Installer
+- **Completely Redesigned UI**: Built with deep obsidian acrylic glass, vibrant ambient purple/cyan radial glow, and modern pill styling.
+- **Dynamic Versioning**: Displays dynamic version badges (\`v1.1.0-beta.1 • NEXT-GEN\`) matching package manifests.
+
 ### 🧩 Strict Mod & Content Manager Version Locking
-- **Zero-Mismatch Mod Downloads**: Content downloads now strictly match and lock to the active instance's exact Minecraft version and loader. Incompatible jar downloads are prevented with clear error feedback.
+- **Zero-Mismatch Mod Downloads**: Content downloads strictly match and lock to the active instance's exact Minecraft version and loader. Incompatible jar downloads are prevented with clear error feedback.
 - **Snapshot & Variant Resolution**: Automatically evaluates snapshot candidates (e.g. 26.4-snapshot-1, 26.3, 26.2, 1.21.4) across Modrinth search and version APIs.
 - **Sodium & Iris Coexistence**: Addressed version conflicts between Iris shaders and standalone Sodium binaries.
 
@@ -33,7 +41,7 @@ const BODY = `## What's Changed in VictusClient v1.1.0-beta.1 (Beta Release) �
 - **Native Passkey & Google SSO**: Opens your real default browser with full Windows Hello, biometrics, and active Google sessions.
 - **Instant Desktop Linking**: Automatically links in under 1.5 seconds via \`/mc-link\`.
 
-### 🎮 Victus Cloud Free Server Hosting
+### ⚡ Victus Cloud Free Server Hosting
 - Real-time player counts, direct IP copying, Start & Stop controls, and one-click SSO into Victus Panel.
 `;
 

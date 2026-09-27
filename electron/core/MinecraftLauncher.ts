@@ -350,17 +350,30 @@ export class MinecraftLauncher {
       }
 
       // 9. Launch Process with error trapping
+      // On Windows, prefer javaw.exe for standalone execution without console dependency
+      let binaryToExecute = javaPath;
+      if (process.platform === 'win32' && javaPath.toLowerCase().endsWith('java.exe')) {
+        const javawCandidate = javaPath.slice(0, -8) + 'javaw.exe';
+        if (fs.existsSync(javawCandidate)) {
+          binaryToExecute = javawCandidate;
+        }
+      }
+
       callbacks.onProgress({ instanceId: id, status: 'launching', percent: 95, message: 'Starting Java process...' });
       callbacks.onLog({
         id: `log-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString(),
         level: 'launcher',
-        message: `Executing: "${javaPath}" ${jvmArgs.join(' ')} ${mainClass} ${gameArgs.join(' ')}`,
+        message: `Executing: "${binaryToExecute}" ${jvmArgs.join(' ')} ${mainClass} ${gameArgs.join(' ')}`,
       });
 
-      const proc = spawn(javaPath, [...jvmArgs, mainClass, ...gameArgs], {
+      const proc = spawn(binaryToExecute, [...jvmArgs, mainClass, ...gameArgs], {
         cwd: instance.gameDir,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
+
+      proc.unref();
 
       this.activeProcesses.set(id, proc);
 
@@ -439,6 +452,22 @@ export class MinecraftLauncher {
       return true;
     }
     return false;
+  }
+
+  public detachAllForQuit(): void {
+    for (const [id, proc] of this.activeProcesses) {
+      try {
+        proc.stdout?.removeAllListeners();
+        proc.stderr?.removeAllListeners();
+        proc.stdout?.destroy();
+        proc.stderr?.destroy();
+        proc.unref();
+      } catch {}
+    }
+  }
+
+  public getActiveProcessCount(): number {
+    return this.activeProcesses.size;
   }
 
   private checkRules(rules?: any[]): boolean {

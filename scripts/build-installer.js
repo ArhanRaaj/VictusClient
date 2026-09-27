@@ -40,6 +40,15 @@ console.log(`   Compressed payload size: ${(asarZipSize / 1024 / 1024).toFixed(2
 console.log('3. Compiling Modern Windows Installer with WPF / .NET...');
 const cscPath = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe';
 
+const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const appVersion = pkg.version || '1.1.0-beta.1';
+console.log(`   Targeting client version: v${appVersion}`);
+
+let csSourceContent = fs.readFileSync(sourceCs, 'utf8');
+csSourceContent = csSourceContent.replace('__APP_VERSION__', appVersion);
+const compiledCsPath = path.join(__dirname, 'Installer.compiled.cs');
+fs.writeFileSync(compiledCsPath, csSourceContent, 'utf8');
+
 let iconFlag = '';
 if (fs.existsSync(iconIco)) {
   iconFlag = `/win32icon:"${iconIco}"`;
@@ -53,9 +62,13 @@ if (fs.existsSync(iconPng)) {
 const wpfLib = 'C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\WPF';
 const references = 'PresentationCore.dll,PresentationFramework.dll,WindowsBase.dll,System.Xaml.dll,System.dll,System.Drawing.dll,System.IO.Compression.dll,System.IO.Compression.FileSystem.dll,Microsoft.CSharp.dll';
 
-const cmd = `"${cscPath}" /target:winexe /optimize+ ${iconFlag} /lib:"${wpfLib}" /reference:${references} ${resourceFlags} /out:"${setupExe}" "${sourceCs}"`;
+const cmd = `"${cscPath}" /target:winexe /optimize+ ${iconFlag} /lib:"${wpfLib}" /reference:${references} ${resourceFlags} /out:"${setupExe}" "${compiledCsPath}"`;
 
-execSync(cmd, { stdio: 'inherit' });
+try {
+  execSync(cmd, { stdio: 'inherit' });
+} finally {
+  try { if (fs.existsSync(compiledCsPath)) fs.unlinkSync(compiledCsPath); } catch {}
+}
 
 const finalSize = fs.statSync(setupExe).size;
 const finalSizeMB = (finalSize / 1024 / 1024).toFixed(2);
