@@ -189,6 +189,42 @@ export const AutoUpdateBanner: React.FC = () => {
     );
   }
 
+  // Parse release notes from GitHub into structured sections
+  const parsedChangelog = React.useMemo(() => {
+    const raw = updateInfo.releaseNotes || '';
+    const lines = raw.split('\n');
+    const sections: { title: string; items: string[] }[] = [];
+    let currentSection: { title: string; items: string[] } | null = null;
+    let intro = '';
+
+    for (const l of lines) {
+      const line = l.trim();
+      if (!line) continue;
+
+      if (line.startsWith('### ') || line.startsWith('## ')) {
+        const title = line.replace(/^#+\s*/, '').trim();
+        currentSection = { title, items: [] };
+        sections.push(currentSection);
+      } else if (line.startsWith('- ') || line.startsWith('* ')) {
+        const item = line.replace(/^[-*]\s*/, '').trim();
+        if (currentSection) {
+          currentSection.items.push(item);
+        } else if (!intro) {
+          intro = item;
+        }
+      } else if (!currentSection && !intro && !line.startsWith('#')) {
+        intro = line;
+      }
+    }
+
+    return {
+      intro: intro || 'Review new additions, compatibility updates, and stability patches before restarting.',
+      sections,
+    };
+  }, [updateInfo.releaseNotes]);
+
+  const isBetaRelease = updateInfo.latestVersion.toLowerCase().includes('beta');
+
   // FULL-SCREEN TAKE-OVER DASHBOARD
   return (
     <div className="fixed inset-0 z-[100] bg-[#07080f]/97 backdrop-blur-3xl flex flex-col justify-between p-6 sm:p-10 select-none animate-view-fade-in overflow-hidden">
@@ -228,7 +264,7 @@ export const AutoUpdateBanner: React.FC = () => {
           ) : (
             <div className="hidden sm:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 text-white/80 text-xs font-bold">
               <Zap className="w-3.5 h-3.5 text-violet-400" />
-              <span>New Release Ready</span>
+              <span>{isBetaRelease ? 'Beta Release Ready' : 'New Release Ready'}</span>
             </div>
           )}
 
@@ -248,8 +284,12 @@ export const AutoUpdateBanner: React.FC = () => {
         <div className="p-6 rounded-3xl bg-[#0f111c] border border-white/10 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div className="space-y-1.5">
             <div className="flex items-center space-x-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-violet-600 text-white">
-                STABLE RELEASE
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                  isBetaRelease ? 'bg-amber-500 text-black font-black' : 'bg-violet-600 text-white'
+                }`}
+              >
+                {isBetaRelease ? 'BETA RELEASE' : 'STABLE RELEASE'}
               </span>
               <span className="text-xs font-mono text-white/40">
                 Published {new Date().toLocaleDateString()}
@@ -259,7 +299,7 @@ export const AutoUpdateBanner: React.FC = () => {
               {updateInfo.releaseName || `VictusClient v${updateInfo.latestVersion}`}
             </h1>
             <p className="text-xs text-white/60 max-w-2xl leading-relaxed">
-              This release brings full Minecraft 26.4 (Snapshot 1) support, an in-launcher Mods & Content Manager with strict version-locking, launcher startup fixes, and a refreshed dark obsidian interface without distracting gradients.
+              {parsedChangelog.intro}
             </p>
           </div>
 
@@ -272,17 +312,7 @@ export const AutoUpdateBanner: React.FC = () => {
                   : 'bg-white/5 text-white/60 hover:text-white'
               }`}
             >
-              Key Highlights
-            </button>
-            <button
-              onClick={() => setActiveTab('changelog')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                activeTab === 'changelog'
-                  ? 'bg-white text-black shadow-sm'
-                  : 'bg-white/5 text-white/60 hover:text-white'
-              }`}
-            >
-              What's Added & Patched
+              What's Changed
             </button>
             <button
               onClick={() => setActiveTab('raw')}
@@ -292,138 +322,58 @@ export const AutoUpdateBanner: React.FC = () => {
                   : 'bg-white/5 text-white/60 hover:text-white'
               }`}
             >
-              Release Notes
+              Raw Notes
             </button>
           </div>
         </div>
 
-        {/* TAB 1: KEY HIGHLIGHTS */}
+        {/* TAB 1: DYNAMIC CHANGELOG CARDS */}
         {activeTab === 'highlights' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Highlight 1: Minecraft 26.4 Snapshot 1 */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-bold text-white">Minecraft 26.4 (Snapshot 1) Support</h3>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Full native compatibility for Minecraft version 26.4 (Snapshot 1), downloading the official Mojang 26.4 client jar and full Fabric mod loader integration.
-              </p>
-            </div>
-
-            {/* Highlight 2: Mods & Content Manager */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-                  <Package className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-bold text-white">Built-in Mods & Shaders Manager</h3>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Browse, search, and 1-click install Mods, Shaders, Resource Packs, and Datapacks from Modrinth directly from the sidebar without opening a web browser.
-              </p>
-            </div>
-
-            {/* Highlight 3: Instance Version Lock */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-bold text-white">Strict Version-Locked Downloads</h3>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Content is verified against your target instance. When downloading mods or shaders, only files strictly compatible with your instance's Minecraft version & loader are downloaded.
-              </p>
-            </div>
-
-            {/* Highlight 4: Launch & Updater Stability */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
-                  <Wrench className="w-4 h-4" />
-                </div>
-                <h3 className="text-sm font-bold text-white">Patched Launch & Update Sequence</h3>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed">
-                Resolved initial launch termination issues, fixed Windows installer relaunch on restart, and replaced loud rainbow gradients with an obsidian matte design.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: DETAILED WHAT'S ADDED & PATCHED */}
-        {activeTab === 'changelog' && (
           <div className="space-y-4">
-            {/* Section 1: Additions */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-3">
-              <div className="flex items-center space-x-2 text-violet-400">
-                <Sparkles className="w-4 h-4" />
-                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-                  ✨ Things Added
-                </h3>
+            {parsedChangelog.sections.length > 0 ? (
+              parsedChangelog.sections.map((section, idx) => (
+                <div key={idx} className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-3">
+                  <div className="flex items-center space-x-2 text-violet-400">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-white">
+                      {section.title}
+                    </h3>
+                  </div>
+                  {section.items.length > 0 ? (
+                    <ul className="space-y-2 text-xs text-white/70">
+                      {section.items.map((it, itemIdx) => {
+                        const boldMatch = it.match(/^\*\*([^*]+)\*\*:\s*(.*)$/);
+                        if (boldMatch) {
+                          return (
+                            <li key={itemIdx} className="flex items-start space-x-2">
+                              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                              <span>
+                                <strong className="text-white font-bold">{boldMatch[1]}:</strong>{' '}
+                                {boldMatch[2]}
+                              </span>
+                            </li>
+                          );
+                        }
+                        return (
+                          <li key={itemIdx} className="flex items-start space-x-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                            <span>{it.replace(/\*\*/g, '')}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 text-xs text-white/70 whitespace-pre-wrap leading-relaxed">
+                {updateInfo.releaseNotes}
               </div>
-              <ul className="space-y-2 text-xs text-white/70">
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Minecraft 26.4 (Snapshot 1) Support:</strong> Added official 26.4 Snapshot 1 version support across Instance Wizard, Servers, and Content Manager.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Modrinth Content Manager:</strong> Direct in-launcher access for Fabric/Forge mods, shaders, resource packs, and datapacks.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Target Instance Capsule:</strong> Active instance picker inside Content Manager to view and manage files per instance.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>1-Click Folder Access:</strong> Instantly open active instance mods, shaders, or resourcepacks folders in Windows Explorer.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Full-Screen Update Center:</strong> Interactive update dialog covering the whole screen with changelog breakdown.</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Section 2: Patches & Fixes */}
-            <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-3">
-              <div className="flex items-center space-x-2 text-emerald-400">
-                <Wrench className="w-4 h-4" />
-                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-                  🛠️ Patches & Fixes
-                </h3>
-              </div>
-              <ul className="space-y-2 text-xs text-white/70">
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Fixed Launch Crash:</strong> Addressed process termination during game startup; improved JVM arguments handling.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Fixed Restart & Apply:</strong> Resolved issue where "Restart & Apply" failed on Windows by supporting both executable and staged asar execution.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Removed Harsh Gradients:</strong> Eliminated gaudy cyan-purple-emerald gradients across the client in favor of clean dark-glass styling.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Installer Optimization:</strong> Compacted standalone Windows installer from &gt;100MB down to under 10MB.</span>
-                </li>
-                <li className="flex items-start space-x-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Version-Locked Mod Downloads:</strong> Prevents incompatible mod files from downloading to instances with different Minecraft versions.</span>
-                </li>
-              </ul>
-            </div>
+            )}
           </div>
         )}
 
-        {/* TAB 3: RAW RELEASE NOTES */}
+        {/* TAB 2: RAW RELEASE NOTES */}
         {activeTab === 'raw' && (
           <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 font-mono text-xs text-white/80 whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
             {updateInfo.releaseNotes}

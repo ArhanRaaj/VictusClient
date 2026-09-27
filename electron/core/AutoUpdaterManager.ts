@@ -260,29 +260,54 @@ export class AutoUpdaterManager {
   }
 
   private formatReleaseNotes(rawBody: string | undefined, tag: string): string {
-    const defaultNotes = [
-      '### ✨ What\'s New in VictusClient v' + tag,
-      '- **Minecraft 26.4 (Snapshot 1) Support**: Full native support for Minecraft 26.4 (26.4-snapshot-1) with official Mojang client runtime and Fabric compatibility.',
-      '- **Mods & Content Manager**: Browse, filter, and install Fabric/Forge mods, shaders, and resource packs directly inside the launcher.',
-      '- **Strict Instance Version Lock**: Content downloads automatically match and lock to the active instance Minecraft version & loader.',
-      '- **Instant Directory Access**: 1-click button to open instance mods/shaders folder in Windows Explorer.',
-      '',
-      '### 🛠️ Fixes & Improvements',
-      '- **Launch Stability Patch**: Fixed process termination issues during initial Minecraft startup.',
-      '- **Auto-Updater Overhaul**: Added full-screen update dashboard with patch breakdown and instant in-place restart.',
-      '- **Restart & Apply Fixed**: Resolved update installer launch failure on Windows.',
-      '- **Refined Obsidian Theme**: Removed harsh color gradients across the UI in favor of a sleek, dark matte aesthetic.',
-      '- **Compact Installer**: Under 10MB standalone Windows installer footprint.',
-    ].join('\n');
-
-    if (!rawBody || rawBody.trim().length === 0 || rawBody.includes('Automated release build')) {
-      return defaultNotes;
+    if (rawBody && rawBody.trim().length > 0 && !rawBody.includes('Automated release build')) {
+      return rawBody.trim();
     }
 
-    return defaultNotes + '\n\n### 📦 Release Details\n' + rawBody.trim();
+    return [
+      `### ✨ What's New in VictusClient v${tag}`,
+      `- Enhanced stability, launcher performance improvements, and core component updates.`,
+      `- Synchronized with latest Victus Cloud infrastructure.`,
+    ].join('\n');
   }
 
   private async fetchLatestRelease(): Promise<any> {
+    // 1. Check /releases endpoint to detect any latest release including prerelease/beta
+    const releasesList = await new Promise<any[]>((resolve) => {
+      const options = {
+        hostname: 'api.github.com',
+        path: `/repos/${this.repoOwner}/${this.repoName}/releases?per_page=5`,
+        headers: {
+          'User-Agent': 'VictusClient-AutoUpdater',
+          Accept: 'application/vnd.github.v3+json',
+        },
+      };
+
+      https
+        .get(options, (res) => {
+          if (res.statusCode !== 200) {
+            resolve([]);
+            return;
+          }
+          let data = '';
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              resolve(Array.isArray(parsed) ? parsed : []);
+            } catch {
+              resolve([]);
+            }
+          });
+        })
+        .on('error', () => resolve([]));
+    });
+
+    if (releasesList && releasesList.length > 0 && releasesList[0].tag_name) {
+      return releasesList[0];
+    }
+
+    // 2. Fallback to /releases/latest for published stable releases
     const apiResult = await new Promise<any>((resolve) => {
       const options = {
         hostname: 'api.github.com',
@@ -316,7 +341,7 @@ export class AutoUpdaterManager {
       return apiResult;
     }
 
-    // Rate-limit immune fallback: Check HTTP 302 redirect on github.com/releases/latest
+    // 3. Rate-limit immune fallback: Check HTTP 302 redirect on github.com/releases/latest
     return await this.fetchLatestReleaseWebFallback();
   }
 
@@ -466,18 +491,38 @@ export class AutoUpdaterManager {
   }
 
   /**
-   * Simple SemVer comparator (returns > 0 if v1 > v2)
+   * SemVer comparator (returns > 0 if v1 > v2, 0 if equal, < 0 if v1 < v2)
+   * Fully supports prerelease tags like 1.1.0-beta.1, 1.1.0-beta.2, etc.
    */
   private compareSemver(v1: string, v2: string): number {
-    const parts1 = v1.split('.').map((p) => parseInt(p, 10) || 0);
-    const parts2 = v2.split('.').map((p) => parseInt(p, 10) || 0);
+    const clean1 = (v1 || '').replace(/^v/i, '').trim();
+    const clean2 = (v2 || '').replace(/^v/i, '').trim();
 
-    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-      const p1 = parts1[i] || 0;
-      const p2 = parts2[i] || 0;
-      if (p1 > p2) return 1;
-      if (p1 < p2) return -1;
+    if (clean1 === clean2) return 0;
+
+    const [main1, pre1] = clean1.split('-');
+    const [main2, pre2] = clean2.split('-');
+
+    const p1 = (main1 || '').split('.').map((n) => parseInt(n, 10) || 0);
+    const p2 = (main2 || '').split('.').map((n) => parseInt(n, 10) || 0);
+
+    for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+      const num1 = p1[i] || 0;
+      const num2 = p2[i] || 0;
+      if (num1 > num2) return 1;
+      if (num1 < num2) return -1;
     }
+
+    // Main version numbers are identical:
+    // A version WITHOUT prerelease is greater than one WITH prerelease (e.g. 1.1.0 > 1.1.0-beta.1)
+    if (!pre1 && pre2) return 1;
+    if (pre1 && !pre2) return -1;
+
+    // Both have prereleases: compare prerelease strings
+    if (pre1 && pre2) {
+      return pre1.localeCompare(pre2, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
     return 0;
   }
 }

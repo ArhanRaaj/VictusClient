@@ -33,11 +33,11 @@ export class ModrinthManager {
         facets.push([`categories:${options.loader}`]);
       }
 
-      // Version filter (resolve custom versions like 26.4/26.3 -> 1.21.4 for Modrinth)
+      // Version filter (multi-candidate OR facet for snapshots and minor versions)
       if (includeVersion && options.gameVersion) {
-        const realVer = this.resolveRealVersion(options.gameVersion);
-        if (realVer) {
-          facets.push([`versions:${realVer}`]);
+        const candidates = this.getGameVersionCandidates(options.gameVersion);
+        if (candidates.length > 0) {
+          facets.push(candidates.map((c) => `versions:${c}`));
         }
       }
 
@@ -74,16 +74,12 @@ export class ModrinthManager {
         return primaryRes;
       }
 
-      // 2. Fallback: Relax game version filter if zero results (e.g. for custom/new versions)
-      const relaxedVersionRes = await doQuery(buildFacets(true, false));
-      if (relaxedVersionRes && relaxedVersionRes.hits && relaxedVersionRes.hits.length > 0) {
-        return relaxedVersionRes;
-      }
-
-      // 3. Fallback: Relax loader filter as well if still empty
-      const relaxedAllRes = await doQuery(buildFacets(false, false));
-      if (relaxedAllRes && relaxedAllRes.hits && relaxedAllRes.hits.length > 0) {
-        return relaxedAllRes;
+      // 2. If query was empty and no hits, try relaxed loader (for universal tools)
+      if (!options.query || options.query.trim().length === 0) {
+        const relaxedLoaderRes = await doQuery(buildFacets(false, true));
+        if (relaxedLoaderRes && relaxedLoaderRes.hits && relaxedLoaderRes.hits.length > 0) {
+          return relaxedLoaderRes;
+        }
       }
     } catch (e) {
       console.error('Modrinth search error:', e);
@@ -92,24 +88,36 @@ export class ModrinthManager {
     return { hits: [], total_hits: 0 };
   }
 
-  public resolveRealVersion(version?: string): string | undefined {
-    if (!version) return undefined;
+  public getGameVersionCandidates(version?: string): string[] {
+    if (!version) return ['26.4-snapshot-1', '26.4'];
     const v = version.trim();
-    if (
-      v === '26.4' ||
-      v === '26.4 Snapshot 1' ||
-      v === '26.4-snapshot-1' ||
-      v.toLowerCase().includes('26.4')
-    ) {
-      return '26.4-snapshot-1';
+    const vLower = v.toLowerCase();
+    if (vLower.includes('26.4')) {
+      return ['26.4-snapshot-1', '26.4'];
     }
-    if (v === '26.3' || v.startsWith('26.3')) return '26.3';
-    if (v === '26.2' || v.startsWith('26.2')) return '26.2';
-    if (v === '26.1' || v.startsWith('26.1')) return '26.1';
-    if (v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
-    if (v === '1.20.8' || v === '1.20') return '1.20.4';
-    if (v === '1.8') return '1.8.9';
-    return v;
+    if (vLower.includes('26.3')) {
+      return ['26.3', '26.3-rc-3', '26.3-rc-2', '26.3-rc-1', '26.3.0'];
+    }
+    if (vLower.includes('26.2')) {
+      return ['26.2', '26.2-rc-2', '26.2-rc-1'];
+    }
+    if (vLower.includes('26.1')) {
+      return ['26.1', '26.1.2', '26.1.1'];
+    }
+    if (v === '1.21.4' || v === '1.21') {
+      return ['1.21.4', '1.21'];
+    }
+    if (v === '1.20.4' || v === '1.20') {
+      return ['1.20.4', '1.20'];
+    }
+    if (v === '1.8' || v === '1.8.9') {
+      return ['1.8.9', '1.8'];
+    }
+    return [v];
+  }
+
+  public resolveRealVersion(version?: string): string | undefined {
+    return this.getGameVersionCandidates(version)[0];
   }
 
   public async getVersions(idOrSlug: string, loaders?: string[], gameVersions?: string[]): Promise<any[]> {
@@ -118,7 +126,11 @@ export class ModrinthManager {
       params.append('loaders', JSON.stringify(loaders.map((l) => l.toLowerCase())));
     }
     if (gameVersions && gameVersions.length > 0) {
-      const mapped = Array.from(new Set(gameVersions.map((v) => this.resolveRealVersion(v) || v).filter(Boolean)));
+      const candidates: string[] = [];
+      for (const gv of gameVersions) {
+        candidates.push(...this.getGameVersionCandidates(gv));
+      }
+      const mapped = Array.from(new Set(candidates.filter(Boolean)));
       if (mapped.length > 0) {
         params.append('game_versions', JSON.stringify(mapped));
       }

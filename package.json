@@ -1,6 +1,6 @@
 {
   "name": "victusclient",
-  "version": "1.0.11",
+  "version": "1.1.0-beta.1",
   "description": "VictusClient - Premium Modern Minecraft Launcher & Client",
   "main": "dist-electron/main.js",
   "scripts": {

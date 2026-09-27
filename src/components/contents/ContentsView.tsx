@@ -437,17 +437,44 @@ export const ContentsView: React.FC = () => {
         }
 
         // Strictly match version supporting current game version
-        const targetVersion =
-          versions.find((v: any) => {
-            const hasVer = v.game_versions && v.game_versions.some((gv: string) => {
-              return gv === realVer || gv === activeInstance.version || (realVer.startsWith('1.21') && gv.startsWith('1.21'));
+        const normalizeVer = (ver: string) => ver.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetVerNorm = normalizeVer(activeInstance.version);
+        const realVerNorm = normalizeVer(realVer);
+        const currentVerBase = activeInstance.version.replace(/^(Fabric|Forge|NeoForge|Quilt)\s+/i, '').trim();
+
+        const targetVersion = versions.find((v: any) => {
+          const hasVer =
+            v.game_versions &&
+            v.game_versions.some((gv: string) => {
+              const gvNorm = normalizeVer(gv);
+              return (
+                gv === realVer ||
+                gv === activeInstance.version ||
+                gv === currentVerBase ||
+                gvNorm === targetVerNorm ||
+                gvNorm === realVerNorm ||
+                (targetVerNorm.includes('264') && gvNorm.includes('264')) ||
+                (targetVerNorm.includes('263') && gvNorm.includes('263')) ||
+                (targetVerNorm.includes('262') && gvNorm.includes('262')) ||
+                (targetVerNorm.includes('261') && gvNorm.includes('261')) ||
+                (currentVerBase.startsWith('1.21') && gv.startsWith('1.21')) ||
+                (currentVerBase.startsWith('1.20') && gv.startsWith('1.20'))
+              );
             });
-            if (activeCategory === 'mods' && loader) {
-              const hasLoader = v.loaders && v.loaders.map((l: string) => l.toLowerCase()).includes(loader.toLowerCase());
-              return hasVer && hasLoader;
-            }
-            return hasVer;
-          }) || versions[0];
+          if (activeCategory === 'mods' && loader) {
+            const hasLoader =
+              v.loaders &&
+              v.loaders.map((l: string) => l.toLowerCase()).includes(loader.toLowerCase());
+            return hasVer && hasLoader;
+          }
+          return hasVer;
+        });
+
+        if (!targetVersion) {
+          throw new Error(
+            `No compatible release of "${item.title}" found for Minecraft ${activeInstance.version} (${loader || 'vanilla'}).`
+          );
+        }
 
         const primaryFile = targetVersion.files?.find((f: any) => f.primary) || targetVersion.files?.[0];
         if (!primaryFile) {
