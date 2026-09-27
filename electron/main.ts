@@ -15,6 +15,7 @@ import { MinecraftLauncher } from './core/MinecraftLauncher';
 import { ModrinthManager } from './core/ModrinthManager';
 import { AutoUpdaterManager } from './core/AutoUpdaterManager';
 import { MicrosoftAuthManager } from './core/MicrosoftAuth';
+import { VictusCloudManager } from './core/VictusCloudManager';
 
 function getOfflinePlayerUuid(username: string): string {
   const hash = crypto.createHash('md5').update('OfflinePlayer:' + username).digest();
@@ -33,6 +34,7 @@ const launcher = new MinecraftLauncher(configManager.getDataDir(), versionManage
 const modrinth = new ModrinthManager();
 const autoUpdater = new AutoUpdaterManager();
 const msAuth = new MicrosoftAuthManager();
+const victusCloud = new VictusCloudManager();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -353,4 +355,46 @@ ipcMain.handle('updater-install', async () => {
 
 ipcMain.handle('updater-get-version', async () => {
   return autoUpdater.getCurrentVersion();
+});
+
+// External link opener
+ipcMain.handle('open-external', async (_, url) => {
+  if (url && typeof url === 'string') {
+    return shell.openExternal(url);
+  }
+});
+
+// Victus Cloud IPC Handlers
+ipcMain.handle('victus-cloud-start-web-auth', async () => {
+  return victusCloud.startWebAuth();
+});
+
+ipcMain.handle('victus-cloud-cancel-web-auth', async () => {
+  victusCloud.cancelWebAuth();
+  return true;
+});
+
+ipcMain.handle('victus-cloud-login-credentials', async (_, email, password) => {
+  return victusCloud.loginWithCredentials(email, password);
+});
+
+ipcMain.handle('victus-cloud-get-profile', async (_, idOrEmail) => {
+  return victusCloud.getUserProfile(idOrEmail);
+});
+
+ipcMain.handle('victus-cloud-get-servers', async (_, email) => {
+  return victusCloud.getServersForUser(email);
+});
+
+ipcMain.handle('victus-cloud-power-action', async (_, serverUuid, nodeId, action) => {
+  return victusCloud.powerAction(serverUuid, nodeId, action);
+});
+
+ipcMain.handle('victus-cloud-get-sso-url', async (_, serverIdentifier, accessToken) => {
+  return victusCloud.getSSOUrl(serverIdentifier, accessToken);
+});
+
+ipcMain.handle('victus-cloud-open-create-page', async () => {
+  victusCloud.openCreateServerPage();
+  return true;
 });

@@ -78,6 +78,16 @@ export interface IElectronAPI {
   getAppVersion: () => Promise<string>;
   onUpdateAvailable: (callback: (info: any) => void) => () => void;
   onUpdateProgress: (callback: (progress: any) => void) => () => void;
+
+  // Victus Cloud
+  victusCloudStartWebAuth: () => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
+  victusCloudCancelWebAuth: () => Promise<boolean>;
+  victusCloudLoginCredentials: (email: string, password: string) => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
+  victusCloudGetProfile: (idOrEmail: string) => Promise<any>;
+  victusCloudGetServers: (email: string) => Promise<any[]>;
+  victusCloudPowerAction: (serverUuid: string, nodeId: number, action: 'start' | 'stop' | 'restart') => Promise<{ success: boolean; error?: string }>;
+  victusCloudGetSSOUrl: (serverIdentifier: string, accessToken?: string) => Promise<{ success: boolean; url: string }>;
+  victusCloudOpenCreatePage: () => Promise<boolean>;
 }
 
 const api: IElectronAPI = {
@@ -156,6 +166,16 @@ const api: IElectronAPI = {
     ipcRenderer.on('updater-progress', sub);
     return () => ipcRenderer.removeListener('updater-progress', sub);
   },
+
+  // Victus Cloud
+  victusCloudStartWebAuth: () => ipcRenderer.invoke('victus-cloud-start-web-auth'),
+  victusCloudCancelWebAuth: () => ipcRenderer.invoke('victus-cloud-cancel-web-auth'),
+  victusCloudLoginCredentials: (email, password) => ipcRenderer.invoke('victus-cloud-login-credentials', email, password),
+  victusCloudGetProfile: (idOrEmail) => ipcRenderer.invoke('victus-cloud-get-profile', idOrEmail),
+  victusCloudGetServers: (email) => ipcRenderer.invoke('victus-cloud-get-servers', email),
+  victusCloudPowerAction: (serverUuid, nodeId, action) => ipcRenderer.invoke('victus-cloud-power-action', serverUuid, nodeId, action),
+  victusCloudGetSSOUrl: (serverIdentifier, accessToken) => ipcRenderer.invoke('victus-cloud-get-sso-url', serverIdentifier, accessToken),
+  victusCloudOpenCreatePage: () => ipcRenderer.invoke('victus-cloud-open-create-page'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

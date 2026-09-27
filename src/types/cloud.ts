@@ -3,16 +3,19 @@ export interface VictusCloudUser {
   username: string;
   email: string;
   avatarUrl: string;
-  tier: 'Free Tier' | 'Pro Booster' | 'Enterprise';
+  tier: string;
   coins: number;
+  total_cp?: number;
   maxServers: number;
   totalRamMb: number;
-  authToken: string;
-  ssoToken: string;
+  authToken?: string;
+  accessToken?: string;
+  ssoToken?: string;
   connectedSince: string;
   cloudSyncEnabled: boolean;
   activeNodesCount: number;
   webPanelUrl: string;
+  referralCode?: string;
 }
 
 export interface CloudSyncState {

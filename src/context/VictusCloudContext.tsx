@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { VictusCloudUser, CloudSyncState } from '../types/cloud';
+import { CloudServer } from '../types/servers';
 import { useLauncher } from './LauncherContext';
 
 interface VictusCloudContextType {
@@ -9,23 +10,24 @@ interface VictusCloudContextType {
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   authPromptMessage: string;
-  isWebPanelModalOpen: boolean;
-  setIsWebPanelModalOpen: (open: boolean) => void;
-  activeWebPanelServerId: string | null;
-  setActiveWebPanelServerId: (id: string | null) => void;
-  login: (usernameOrEmail: string, password?: string) => Promise<boolean>;
-  quickConnect: (username?: string) => Promise<boolean>;
+  freeServers: CloudServer[];
+  isServersLoading: boolean;
+  loginWithBrowser: () => Promise<boolean>;
+  loginWithCredentials: (email: string, pass: string) => Promise<boolean>;
   logout: () => void;
   requireCloudAuth: (message?: string, callback?: () => void) => boolean;
-  openWebPanel: (serverId?: string) => void;
-  syncCloudData: () => Promise<void>;
+  openPanelSSO: (serverIdentifier?: string) => Promise<void>;
+  openCreateFreeServer: () => void;
+  refreshUserData: () => Promise<void>;
+  refreshServers: () => Promise<void>;
+  powerServer: (serverUuid: string, nodeId: number, action: 'start' | 'stop' | 'restart') => Promise<boolean>;
   updateCoins: (newCoins: number) => void;
 }
 
 const VictusCloudContext = createContext<VictusCloudContextType | undefined>(undefined);
 
 export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { addNotification, activeAccount } = useLauncher();
+  const { addNotification } = useLauncher();
 
   const [cloudUser, setCloudUser] = useState<VictusCloudUser | null>(() => {
     try {
@@ -36,6 +38,9 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   });
 
+  const [freeServers, setFreeServers] = useState<CloudServer[]>([]);
+  const [isServersLoading, setIsServersLoading] = useState(false);
+
   const [syncState, setSyncState] = useState<CloudSyncState>({
     lastSynced: 'Just now',
     isSyncing: false,
@@ -45,9 +50,6 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState('Connect your Victus Cloud account to access this feature.');
   const [pendingCallback, setPendingCallback] = useState<(() => void) | null>(null);
-
-  const [isWebPanelModalOpen, setIsWebPanelModalOpen] = useState(false);
-  const [activeWebPanelServerId, setActiveWebPanelServerId] = useState<string | null>(null);
 
   // Sync to local storage
   useEffect(() => {
@@ -60,80 +62,268 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } catch {}
   }, [cloudUser]);
 
-  // Login implementation
-  const login = async (usernameOrEmail: string, password?: string): Promise<boolean> => {
-    setSyncState((prev) => ({ ...prev, isSyncing: true }));
+  // Refresh user coins and profile from Supabase
+  const refreshUserData = useCallback(async () => {
+    if (!cloudUser?.email && !cloudUser?.id) return;
+    try {
+      setSyncState((prev) => ({ ...prev, isSyncing: true }));
+      let profile: any = null;
 
-    await new Promise((r) => setTimeout(r, 800));
+      if (window.electronAPI?.victusCloudGetProfile) {
+        profile = await window.electronAPI.victusCloudGetProfile(cloudUser.email || cloudUser.id);
+      }
 
-    const cleanName = usernameOrEmail.includes('@')
-      ? usernameOrEmail.split('@')[0]
-      : usernameOrEmail.trim() || 'VictusUser';
+      if (profile) {
+        setCloudUser((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            username: profile.username || prev.username,
+            avatarUrl: profile.avatar_url || prev.avatarUrl,
+            coins: typeof profile.total_cp === 'number' ? profile.total_cp : prev.coins,
+            total_cp: typeof profile.total_cp === 'number' ? profile.total_cp : prev.total_cp,
+            tier: profile.cp_tier || prev.tier,
+            referralCode: profile.referral_code || prev.referralCode,
+          };
+        });
+      }
 
-    const newUser: VictusCloudUser = {
-      id: `vcloud-${Date.now()}`,
-      username: cleanName,
-      email: usernameOrEmail.includes('@') ? usernameOrEmail.trim() : `${cleanName.toLowerCase()}@victusclient.net`,
-      avatarUrl: `https://mc-heads.net/avatar/${encodeURIComponent(cleanName)}/128`,
-      tier: 'Free Tier',
-      coins: 450,
-      maxServers: 3,
-      totalRamMb: 8192,
-      authToken: `vt_${Math.random().toString(36).substring(2)}${Date.now()}`,
-      ssoToken: `sso_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`,
-      connectedSince: 'Today',
-      cloudSyncEnabled: true,
-      activeNodesCount: 2,
-      webPanelUrl: 'https://panel.victusclient.net',
-    };
+      setSyncState({
+        lastSynced: 'Just now',
+        isSyncing: false,
+        status: 'online',
+      });
+    } catch (e) {
+      console.warn('[VictusCloud] Failed to refresh profile:', e);
+      setSyncState((prev) => ({ ...prev, isSyncing: false, status: 'error' }));
+    }
+  }, [cloudUser?.email, cloudUser?.id]);
 
-    setCloudUser(newUser);
-    setSyncState({
-      lastSynced: 'Just now',
-      isSyncing: false,
-      status: 'online',
-    });
-    setIsAuthModalOpen(false);
-
-    addNotification({
-      type: 'success',
-      title: 'Victus Cloud Bridge Connected',
-      message: `Signed in as @${newUser.username}. Cloud nodes & Web Control Panel synchronized!`,
-    });
-
-    if (pendingCallback) {
-      pendingCallback();
-      setPendingCallback(null);
+  // Refresh Free Servers from Pterodactyl Panel
+  const refreshServers = useCallback(async () => {
+    if (!cloudUser?.email) {
+      setFreeServers([]);
+      return;
     }
 
-    return true;
+    try {
+      setIsServersLoading(true);
+      if (window.electronAPI?.victusCloudGetServers) {
+        const rawServers = await window.electronAPI.victusCloudGetServers(cloudUser.email);
+        const mapped: CloudServer[] = rawServers.map((s: any) => ({
+          id: `srv-${s.identifier || s.id}`,
+          name: s.name,
+          subdomain: s.ip,
+          port: s.port,
+          version: '1.21.4',
+          software: 'paper',
+          status: s.status,
+          playersOnline: s.playersOnline || 0,
+          maxPlayers: s.maxPlayers || 20,
+          ramMb: s.ramMb || 2048,
+          cpuCores: 2,
+          diskGb: 10,
+          motd: `§b§l${s.name} §7• §a24/7 Free Victus Cloud`,
+          region: s.nodeId === 4 ? 'Singapore (SG-1)' : 'Germany (Frankfurt DE-1)',
+          createdAt: 'Active',
+          uptimeMinutes: 120,
+          cpuPercent: s.cpuPercent || 0,
+          ramUsedMb: Math.round((s.ramMb || 2048) * 0.4),
+          autoSleep: true,
+          identifier: s.identifier,
+          uuid: s.uuid,
+          nodeId: s.nodeId,
+          panelUrl: s.panelUrl,
+          fullAddress: s.fullAddress,
+        }));
+        setFreeServers(mapped);
+      }
+    } catch (e) {
+      console.warn('[VictusCloud] Failed to fetch servers:', e);
+    } finally {
+      setIsServersLoading(false);
+    }
+  }, [cloudUser?.email]);
+
+  // Initial load and periodic refresh
+  useEffect(() => {
+    if (cloudUser) {
+      refreshUserData();
+      refreshServers();
+    }
+  }, [cloudUser?.email]);
+
+  // Periodic poll for coins and servers every 30s
+  useEffect(() => {
+    if (!cloudUser) return;
+    const interval = setInterval(() => {
+      refreshUserData();
+      refreshServers();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [cloudUser, refreshUserData, refreshServers]);
+
+  // Login with Browser (Redirect Handshake on http://localhost:3000/auth/callback)
+  const loginWithBrowser = async (): Promise<boolean> => {
+    try {
+      setSyncState((prev) => ({ ...prev, isSyncing: true }));
+      if (!window.electronAPI?.victusCloudStartWebAuth) {
+        throw new Error('Desktop bridge unavailable');
+      }
+
+      const res = await window.electronAPI.victusCloudStartWebAuth();
+      if (!res.success || !res.profile) {
+        addNotification({
+          type: 'error',
+          title: 'Victus Cloud Login Cancelled',
+          message: res.error || 'Authentication process did not complete.',
+        });
+        setSyncState((prev) => ({ ...prev, isSyncing: false }));
+        return false;
+      }
+
+      const p = res.profile;
+      const newUser: VictusCloudUser = {
+        id: p.id,
+        username: p.username,
+        email: p.email,
+        avatarUrl: p.avatar_url || `https://mc-heads.net/avatar/${encodeURIComponent(p.username)}/128`,
+        tier: p.cp_tier || 'Starter',
+        coins: typeof p.total_cp === 'number' ? p.total_cp : 0,
+        total_cp: p.total_cp,
+        maxServers: 3,
+        totalRamMb: 8192,
+        accessToken: res.accessToken,
+        connectedSince: 'Today',
+        cloudSyncEnabled: true,
+        activeNodesCount: 2,
+        webPanelUrl: 'https://control.victuscloud.com',
+        referralCode: p.referral_code,
+      };
+
+      setCloudUser(newUser);
+      setIsAuthModalOpen(false);
+      setSyncState({
+        lastSynced: 'Just now',
+        isSyncing: false,
+        status: 'online',
+      });
+
+      addNotification({
+        type: 'success',
+        title: 'Victus Cloud Account Linked',
+        message: `Welcome, @${newUser.username}! Connected with ${newUser.coins.toLocaleString()} Coins.`,
+      });
+
+      if (pendingCallback) {
+        pendingCallback();
+        setPendingCallback(null);
+      }
+
+      return true;
+    } catch (e: any) {
+      console.warn('[VictusCloud] Web auth error:', e);
+      addNotification({
+        type: 'error',
+        title: 'Authentication Error',
+        message: e.message || 'Failed to authenticate with Victus Cloud.',
+      });
+      setSyncState((prev) => ({ ...prev, isSyncing: false }));
+      return false;
+    }
   };
 
-  // Quick connect using current launcher player username
-  const quickConnect = async (username?: string): Promise<boolean> => {
-    const targetName = username || activeAccount?.username || 'VictusHero';
-    return login(targetName);
+  // Login with Credentials
+  const loginWithCredentials = async (email: string, pass: string): Promise<boolean> => {
+    try {
+      setSyncState((prev) => ({ ...prev, isSyncing: true }));
+      if (!window.electronAPI?.victusCloudLoginCredentials) {
+        throw new Error('Desktop bridge unavailable');
+      }
+
+      const res = await window.electronAPI.victusCloudLoginCredentials(email, pass);
+      if (!res.success || !res.profile) {
+        addNotification({
+          type: 'error',
+          title: 'Sign In Failed',
+          message: res.error || 'Invalid email or password.',
+        });
+        setSyncState((prev) => ({ ...prev, isSyncing: false }));
+        return false;
+      }
+
+      const p = res.profile;
+      const newUser: VictusCloudUser = {
+        id: p.id,
+        username: p.username,
+        email: p.email,
+        avatarUrl: p.avatar_url || `https://mc-heads.net/avatar/${encodeURIComponent(p.username)}/128`,
+        tier: p.cp_tier || 'Starter',
+        coins: typeof p.total_cp === 'number' ? p.total_cp : 0,
+        total_cp: p.total_cp,
+        maxServers: 3,
+        totalRamMb: 8192,
+        accessToken: res.accessToken,
+        connectedSince: 'Today',
+        cloudSyncEnabled: true,
+        activeNodesCount: 2,
+        webPanelUrl: 'https://control.victuscloud.com',
+        referralCode: p.referral_code,
+      };
+
+      setCloudUser(newUser);
+      setIsAuthModalOpen(false);
+      setSyncState({
+        lastSynced: 'Just now',
+        isSyncing: false,
+        status: 'online',
+      });
+
+      addNotification({
+        type: 'success',
+        title: 'Victus Cloud Connected',
+        message: `Signed in as @${newUser.username}. ${newUser.coins.toLocaleString()} Coins synchronized.`,
+      });
+
+      if (pendingCallback) {
+        pendingCallback();
+        setPendingCallback(null);
+      }
+
+      return true;
+    } catch (e: any) {
+      addNotification({
+        type: 'error',
+        title: 'Connection Error',
+        message: e.message || 'Unable to connect to Victus Cloud.',
+      });
+      setSyncState((prev) => ({ ...prev, isSyncing: false }));
+      return false;
+    }
   };
 
   // Logout
   const logout = () => {
+    if (window.electronAPI?.victusCloudCancelWebAuth) {
+      window.electronAPI.victusCloudCancelWebAuth();
+    }
     setCloudUser(null);
+    setFreeServers([]);
     localStorage.removeItem('victus_cloud_account');
     addNotification({
       type: 'info',
-      title: 'Disconnected from Victus Cloud',
-      message: 'Cloud sync suspended. Sign in anytime to reconnect your nodes.',
+      title: 'Victus Cloud Disconnected',
+      message: 'Your account has been unlinked from Victus Client.',
     });
   };
 
-  // Guard action with cloud auth requirement
+  // Require Auth Guard
   const requireCloudAuth = (message?: string, callback?: () => void): boolean => {
     if (cloudUser) {
       if (callback) callback();
       return true;
     }
-
-    setAuthPromptMessage(message || 'Sign in with your Victus Cloud account to proceed.');
+    setAuthPromptMessage(message || 'Connect your Victus Cloud account to manage free servers.');
     if (callback) {
       setPendingCallback(() => callback);
     }
@@ -141,44 +331,95 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return false;
   };
 
-  // Open Web Control Panel (both external and in-app bridge)
-  const openWebPanel = (serverId?: string) => {
+  // Open SSO into Victus Panel
+  const openPanelSSO = async (serverIdentifier?: string) => {
     if (!cloudUser) {
-      requireCloudAuth('Sign in with Victus Cloud to access the Web Control Panel.', () => {
-        openWebPanel(serverId);
-      });
+      requireCloudAuth('Sign in with Victus Cloud to access your servers in Victus Panel.');
       return;
     }
 
-    setActiveWebPanelServerId(serverId || null);
-    setIsWebPanelModalOpen(true);
-
-    const ssoUrl = `https://panel.victusclient.net/${serverId ? `server/${serverId}` : 'dashboard'}?sso=${cloudUser.ssoToken}&user=${encodeURIComponent(cloudUser.username)}`;
-
-    if (window.electronAPI && window.electronAPI.openExternal) {
-      // Allow user to also open in full external browser
+    try {
+      if (window.electronAPI?.victusCloudGetSSOUrl) {
+        const id = serverIdentifier || '';
+        const res = await window.electronAPI.victusCloudGetSSOUrl(id, cloudUser.accessToken);
+        const urlToOpen = res.url || `https://control.victuscloud.com/server/${id}`;
+        if (window.electronAPI?.openExternal) {
+          await window.electronAPI.openExternal(urlToOpen);
+        } else {
+          window.open(urlToOpen, '_blank');
+        }
+      } else {
+        const fallback = serverIdentifier
+          ? `https://control.victuscloud.com/server/${serverIdentifier}`
+          : 'https://control.victuscloud.com';
+        if (window.electronAPI?.openExternal) {
+          window.electronAPI.openExternal(fallback);
+        } else {
+          window.open(fallback, '_blank');
+        }
+      }
+    } catch (e) {
+      console.warn('[VictusCloud] SSO open failed:', e);
     }
   };
 
-  // Sync cloud telemetry
-  const syncCloudData = async () => {
-    if (!cloudUser) return;
-    setSyncState((prev) => ({ ...prev, isSyncing: true }));
-    await new Promise((r) => setTimeout(r, 900));
-    setSyncState({
-      lastSynced: 'Just now',
-      isSyncing: false,
-      status: 'online',
-    });
+  // Open Free Server Creation Page
+  const openCreateFreeServer = () => {
+    if (window.electronAPI?.victusCloudOpenCreatePage) {
+      window.electronAPI.victusCloudOpenCreatePage();
+    } else if (window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal('https://victuscloud.com/free?createServer=1');
+    } else {
+      window.open('https://victuscloud.com/free?createServer=1', '_blank');
+    }
+  };
+
+  // Wings Node Power Action (Start / Stop / Restart)
+  const powerServer = async (
+    serverUuid: string,
+    nodeId: number,
+    action: 'start' | 'stop' | 'restart'
+  ): Promise<boolean> => {
+    if (!window.electronAPI?.victusCloudPowerAction) return false;
+
+    // Optimistic UI state
+    setFreeServers((prev) =>
+      prev.map((s) => {
+        if (s.uuid === serverUuid) {
+          return {
+            ...s,
+            status: action === 'start' ? 'starting' : action === 'stop' ? 'stopping' : 'restarting',
+          };
+        }
+        return s;
+      })
+    );
+
+    const res = await window.electronAPI.victusCloudPowerAction(serverUuid, nodeId, action);
+    if (!res.success) {
+      addNotification({
+        type: 'error',
+        title: `Server ${action.toUpperCase()} Failed`,
+        message: res.error || `Could not execute ${action} on node.`,
+      });
+      refreshServers();
+      return false;
+    }
+
     addNotification({
       type: 'success',
-      title: 'Cloud Cluster Synced',
-      message: 'All servers, player quotas, and coin balance synced with panel.victusclient.net',
+      title: `Server ${action === 'start' ? 'Starting' : action === 'stop' ? 'Stopping' : 'Restarting'}`,
+      message: `Power signal "${action}" successfully dispatched.`,
     });
+
+    // Check status after 3s and 8s
+    setTimeout(refreshServers, 3000);
+    setTimeout(refreshServers, 8000);
+    return true;
   };
 
   const updateCoins = (newCoins: number) => {
-    setCloudUser((prev) => (prev ? { ...prev, coins: newCoins } : null));
+    setCloudUser((prev) => (prev ? { ...prev, coins: newCoins, total_cp: newCoins } : null));
   };
 
   return (
@@ -190,16 +431,17 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isAuthModalOpen,
         setIsAuthModalOpen,
         authPromptMessage,
-        isWebPanelModalOpen,
-        setIsWebPanelModalOpen,
-        activeWebPanelServerId,
-        setActiveWebPanelServerId,
-        login,
-        quickConnect,
+        freeServers,
+        isServersLoading,
+        loginWithBrowser,
+        loginWithCredentials,
         logout,
         requireCloudAuth,
-        openWebPanel,
-        syncCloudData,
+        openPanelSSO,
+        openCreateFreeServer,
+        refreshUserData,
+        refreshServers,
+        powerServer,
         updateCoins,
       }}
     >

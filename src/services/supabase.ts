@@ -5,13 +5,22 @@ const getSupabaseConfig = () => {
   const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
   const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 
-  const storedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('victus_supabase_url') : null;
-  const storedKey = typeof localStorage !== 'undefined' ? localStorage.getItem('victus_supabase_anon_key') : null;
+  let storedUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('victus_supabase_url') : null;
+  let storedKey = typeof localStorage !== 'undefined' ? localStorage.getItem('victus_supabase_anon_key') : null;
 
-  const url = storedUrl || envUrl || 'https://victuscloud.supabase.co';
-  const anonKey = storedKey || envKey || 'public-anon-key-placeholder';
+  // Clear stale placeholder if found
+  if (storedUrl && storedUrl.includes('supabase.co')) {
+    storedUrl = null;
+    localStorage.removeItem('victus_supabase_url');
+  }
 
-  return { url, anonKey, isConfigured: !!(storedUrl || envUrl) };
+  const url = storedUrl || envUrl || 'https://db.victuscloud.com';
+  const anonKey =
+    storedKey ||
+    envKey ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdWl5d2R1amlucmtrcG9icHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3ODYyNDMsImV4cCI6MjA3OTM2MjI0M30.Vghl_PKcGwqudXq-fnk-6IuX16NM-PHtngU4aL9cxcc';
+
+  return { url, anonKey, isConfigured: true };
 };
 
 let clientInstance: SupabaseClient | null = null;

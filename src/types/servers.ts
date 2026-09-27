@@ -22,13 +22,18 @@ export interface CloudServer {
   cpuPercent: number;
   ramUsedMb: number;
   autoSleep: boolean;
+  identifier?: string;
+  uuid?: string;
+  nodeId?: number;
+  panelUrl?: string;
+  fullAddress?: string;
 }
 
 export interface CloudWallet {
   coins: number;
   lastClaimDate?: string;
   claimedToday: boolean;
-  tier: 'Free Tier' | 'Pro Booster';
+  tier: string;
   maxServers: number;
   totalRamLimitMb: number;
 }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Minus, Square, X, Search, User, Sparkles } from 'lucide-react';
+import { Minus, Square, X, Search, User, Sparkles, Coins } from 'lucide-react';
 import { useLauncher } from '../../context/LauncherContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useVictusCloud } from '../../context/VictusCloudContext';
 
 interface TitleBarProps {
   onOpenSearch: () => void;
@@ -11,6 +12,7 @@ interface TitleBarProps {
 
 export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, setActiveTab }) => {
   const { activeAccount, isElectron } = useLauncher();
+  const { cloudUser, setIsAuthModalOpen } = useVictusCloud();
   const { theme } = useTheme();
   const accentColor = theme.sidebarColor || theme.primaryAccent || '#7c3aed';
   const [isMaximized, setIsMaximized] = useState(false);
@@ -85,6 +87,27 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
             {activeAccount?.username || 'VictusHero'}
           </span>
         </button>
+
+        {/* Victus Cloud Coins Pill */}
+        {cloudUser ? (
+          <button
+            onClick={() => setActiveTab('servers')}
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/25 hover:border-amber-400/40 text-amber-300 font-mono text-[11px] font-black transition-all cursor-pointer shadow-sm group"
+            title={`Victus Cloud: ${cloudUser.coins.toLocaleString()} Coins • Click to manage Free Servers`}
+          >
+            <Coins className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span>{cloudUser.coins.toLocaleString()} Coins</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 hover:bg-purple-500/20 border border-purple-400/20 hover:border-purple-400/35 text-purple-300 font-mono text-[10px] font-bold transition-all cursor-pointer shadow-sm group"
+            title="Connect your Victus Cloud account"
+          >
+            <Coins className="w-3 h-3 text-purple-400 group-hover:scale-110 transition-transform" />
+            <span>Connect Cloud</span>
+          </button>
+        )}
 
         <div className="h-4 w-[1px] bg-white/10" />
 
