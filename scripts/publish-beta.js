@@ -171,24 +171,29 @@ async function main() {
   const uploadUrl = createRes.data.upload_url;
   console.log(`Created Release ${TAG} (ID: ${releaseId})`);
 
-  console.log('3. Uploading Release Assets...');
+  console.log('3. Uploading Cross-Platform Release Assets...');
   const releaseDir = path.join(__dirname, '..', 'release');
-  const exePath = path.join(releaseDir, 'VictusClient-Setup.exe');
-  const zipPath = path.join(releaseDir, 'app-asar.zip');
 
-  if (fs.existsSync(exePath)) {
-    await uploadAsset(uploadUrl, exePath, 'VictusClient-Setup.exe');
-  } else {
-    console.warn('VictusClient-Setup.exe not found at:', exePath);
+  const assetsToUpload = [
+    'VictusClient-Setup-x64.exe',
+    'VictusClient-Setup-ia32.exe',
+    'VictusClient-Setup.exe',
+    'VictusClient-Setup-x86.exe',
+    'VictusClient-macOS-arm64.zip',
+    'VictusClient-macOS-x64.zip',
+    'app-asar.zip',
+  ];
+
+  for (const assetName of assetsToUpload) {
+    const assetPath = path.join(releaseDir, assetName);
+    if (fs.existsSync(assetPath)) {
+      await uploadAsset(uploadUrl, assetPath, assetName);
+    } else {
+      console.warn(`Asset ${assetName} not found at:`, assetPath);
+    }
   }
 
-  if (fs.existsSync(zipPath)) {
-    await uploadAsset(uploadUrl, zipPath, 'app-asar.zip');
-  } else {
-    console.warn('app-asar.zip not found at:', zipPath);
-  }
-
-  console.log('\n🎉 Successfully published release ' + TAG + '!');
+  console.log('\n🎉 Successfully published release ' + TAG + ' with all cross-platform setup files!');
   console.log(`Release URL: https://github.com/${OWNER}/${REPO}/releases/tag/${TAG}`);
 }
 

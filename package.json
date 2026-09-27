@@ -66,11 +66,11 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": ["x64", "ia32"]
         }
       ],
       "icon": "public/icon.png",
-      "artifactName": "VictusClient-Setup-${version}.${ext}"
+      "artifactName": "VictusClient-Setup-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": true,
