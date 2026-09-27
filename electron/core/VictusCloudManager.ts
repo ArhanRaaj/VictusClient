@@ -623,7 +623,7 @@ export class VictusCloudManager {
       const res = await this.httpsRequest(
         `https://api.mcsrvstat.us/3/${encodeURIComponent(host)}:${port}`,
         'GET',
-        { 'User-Agent': 'VictusClient/1.0.8 (support@victusclient.com)' }
+        { 'User-Agent': 'VictusClient/1.0.9 (support@victusclient.com)' }
       );
       if (res.status === 200 && res.data) {
         return {

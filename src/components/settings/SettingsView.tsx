@@ -29,7 +29,7 @@ export const SettingsView: React.FC = () => {
   >('appearance');
 
   // Auto-updater state
-  const [appVersion, setAppVersion] = useState('1.0.8');
+  const [appVersion, setAppVersion] = useState('1.0.9');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);

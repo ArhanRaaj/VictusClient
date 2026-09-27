@@ -31,7 +31,7 @@ export class AutoUpdaterManager {
   private isDownloading = false;
 
   constructor() {
-    this.currentVersion = app?.isPackaged ? app.getVersion() : (app?.getVersion?.() || '1.0.8');
+    this.currentVersion = app?.isPackaged ? app.getVersion() : (app?.getVersion?.() || '1.0.9');
   }
 
   public getCurrentVersion(): string {

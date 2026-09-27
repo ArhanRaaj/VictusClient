@@ -365,7 +365,7 @@ namespace VictusClientInstaller
             };
             badge.Child = new TextBlock
             {
-                Text = "v1.0.8 \u2022 Official",
+                Text = "v1.0.9 \u2022 Official",
                 FontSize = 10,
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
@@ -891,7 +891,7 @@ namespace VictusClientInstaller
                     {
                         string exePath = Path.Combine(installDir, "VictusClient.exe");
                         key.SetValue("DisplayName", "VictusClient");
-                        key.SetValue("DisplayVersion", "1.0.8");
+                        key.SetValue("DisplayVersion", "1.0.9");
                         key.SetValue("Publisher", "VictusClient Team");
                         key.SetValue("InstallLocation", installDir);
                         key.SetValue("DisplayIcon", exePath);

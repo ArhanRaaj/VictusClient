@@ -16,7 +16,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
   const { theme } = useTheme();
   const accentColor = theme.sidebarColor || theme.primaryAccent || '#7c3aed';
   const [isMaximized, setIsMaximized] = useState(false);
-  const [appVersion, setAppVersion] = useState('v1.0.8');
+  const [appVersion, setAppVersion] = useState('v1.0.9');
 
   useEffect(() => {
     if (isElectron && window.electronAPI) {
