@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import https from 'https';
 import http from 'http';
 import dns from 'dns';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from 'child_process';
 import AdmZip from 'adm-zip';
 import { VersionManager } from './VersionManager';
 import { JavaManager } from './JavaManager';
@@ -313,6 +313,7 @@ export class MinecraftLauncher {
         `-Dio.netty.native.workdir=${nativesDir}`,
         `-Dminecraft.launcher.brand=VictusClient`,
         `-Dminecraft.launcher.version=1.0.0`,
+        '--enable-native-access=ALL-UNNAMED',
       ];
 
       if (instance.jvmArgs) {
@@ -453,76 +454,109 @@ export class MinecraftLauncher {
     return allowed;
   }
 
-  private async downloadFile(url: string, destPath: string, retries = 3): Promise<void> {
+  private async downloadFile(url: string, destPath: string, retries = 5): Promise<void> {
     const dir = path.dirname(destPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
+    // 1. Native Windows curl optimization (avoids BoringSSL socket drop & BAD_DECRYPT issues on IPv6)
+    if (process.platform === 'win32' && fs.existsSync('C:\\Windows\\System32\\curl.exe')) {
+      try {
+        const tempPath = `${destPath}.part`;
+        execSync(
+          `"C:\\Windows\\System32\\curl.exe" -4 -s -L -C - --retry 3 --connect-timeout 15 -o "${tempPath}" "${url}"`,
+          { stdio: 'ignore', timeout: 120000 }
+        );
+        if (fs.existsSync(tempPath) && fs.statSync(tempPath).size > 0) {
+          fs.copyFileSync(tempPath, destPath);
+          try { fs.unlinkSync(tempPath); } catch {}
+          return;
+        }
+      } catch {}
+    }
+
+    // 2. Resumable HTTP/HTTPS downloader with Range support and strict byte-verification
+    const tempPath = `${destPath}.part`;
     let lastError: any;
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         await new Promise<void>((resolve, reject) => {
-          const tempPath = `${destPath}.tmp.${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          const file = fs.createWriteStream(tempPath);
-          let finished = false;
+          const startBytes = fs.existsSync(tempPath) ? fs.statSync(tempPath).size : 0;
+          const file = fs.createWriteStream(tempPath, { flags: startBytes > 0 ? 'a' : 'w' });
 
           const cleanup = () => {
-            try {
-              if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            } catch {}
+            try { file.destroy(); } catch {}
           };
 
           const request = (targetUrl: string, redirectCount = 0) => {
             if (redirectCount > 5) {
-              file.destroy();
               cleanup();
               return reject(new Error(`Too many redirects for ${url}`));
             }
 
             const client = targetUrl.startsWith('https') ? https : http;
+            const headers: Record<string, string> = {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) VictusClient/1.0',
+              'Connection': 'close',
+              'Accept': '*/*',
+            };
+
+            if (startBytes > 0) {
+              headers['Range'] = `bytes=${startBytes}-`;
+            }
+
             const req = client.get(
               targetUrl,
               {
                 family: 4,
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) VictusClient/1.0',
-                  'Connection': 'close',
-                  'Accept': '*/*',
-                },
-                timeout: 45000,
+                headers,
+                timeout: 30000,
               },
               (res) => {
                 if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                  file.destroy();
                   cleanup();
                   const redirectUrl = new URL(res.headers.location, targetUrl).toString();
                   return request(redirectUrl, redirectCount + 1);
                 }
 
-                if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
-                  file.destroy();
+                if (res.statusCode !== 200 && res.statusCode !== 206) {
                   cleanup();
                   return reject(new Error(`HTTP ${res.statusCode || 0} downloading ${targetUrl}`));
                 }
 
+                const expectedTotal = res.statusCode === 206
+                  ? startBytes + parseInt(res.headers['content-length'] || '0', 10)
+                  : parseInt(res.headers['content-length'] || '0', 10);
+
+                let receivedBytes = startBytes;
+
+                res.on('data', (chunk) => {
+                  receivedBytes += chunk.length;
+                });
+
                 res.pipe(file);
 
-                file.on('close', () => {
-                  if (finished) return;
-                  finished = true;
-                  try {
-                    fs.copyFileSync(tempPath, destPath);
-                    cleanup();
-                    resolve();
-                  } catch (e) {
-                    cleanup();
-                    reject(e);
-                  }
+                res.on('error', (err) => {
+                  cleanup();
+                  reject(err);
+                });
+
+                file.on('finish', () => {
+                  file.close(() => {
+                    if (expectedTotal > 0 && receivedBytes < expectedTotal) {
+                      return reject(new Error(`Incomplete download: received ${receivedBytes} of ${expectedTotal} bytes`));
+                    }
+                    try {
+                      fs.copyFileSync(tempPath, destPath);
+                      try { fs.unlinkSync(tempPath); } catch {}
+                      resolve();
+                    } catch (e) {
+                      reject(e);
+                    }
+                  });
                 });
 
                 file.on('error', (fileErr) => {
-                  if (finished) return;
-                  finished = true;
-                  file.destroy();
                   cleanup();
                   reject(fileErr);
                 });
@@ -530,13 +564,10 @@ export class MinecraftLauncher {
             );
 
             req.on('timeout', () => {
-              req.destroy(new Error('Request timed out'));
+              req.destroy(new Error('Download request timed out'));
             });
 
             req.on('error', (err) => {
-              if (finished) return;
-              finished = true;
-              file.destroy();
               cleanup();
               reject(err);
             });
@@ -550,7 +581,7 @@ export class MinecraftLauncher {
       } catch (err: any) {
         lastError = err;
         if (attempt < retries) {
-          await new Promise((r) => setTimeout(r, 400 * attempt));
+          await new Promise((r) => setTimeout(r, 500 * attempt));
         }
       }
     }
