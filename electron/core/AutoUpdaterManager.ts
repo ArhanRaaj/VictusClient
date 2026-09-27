@@ -31,7 +31,7 @@ export class AutoUpdaterManager {
   private isDownloading = false;
 
   constructor() {
-    this.currentVersion = app.isPackaged ? app.getVersion() : '1.0.0';
+    this.currentVersion = app?.isPackaged ? app.getVersion() : (app?.getVersion?.() || '1.0.7');
   }
 
   public getCurrentVersion(): string {
@@ -280,8 +280,8 @@ export class AutoUpdaterManager {
     return defaultNotes + '\n\n### 📦 Release Details\n' + rawBody.trim();
   }
 
-  private fetchLatestRelease(): Promise<any> {
-    return new Promise((resolve) => {
+  private async fetchLatestRelease(): Promise<any> {
+    const apiResult = await new Promise<any>((resolve) => {
       const options = {
         hostname: 'api.github.com',
         path: `/repos/${this.repoOwner}/${this.repoName}/releases/latest`,
@@ -306,6 +306,56 @@ export class AutoUpdaterManager {
               resolve(null);
             }
           });
+        })
+        .on('error', () => resolve(null));
+    });
+
+    if (apiResult && apiResult.tag_name) {
+      return apiResult;
+    }
+
+    // Rate-limit immune fallback: Check HTTP 302 redirect on github.com/releases/latest
+    return await this.fetchLatestReleaseWebFallback();
+  }
+
+  private fetchLatestReleaseWebFallback(): Promise<any> {
+    return new Promise((resolve) => {
+      const options = {
+        hostname: 'github.com',
+        path: `/${this.repoOwner}/${this.repoName}/releases/latest`,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        },
+      };
+
+      https
+        .get(options, (res) => {
+          const loc = res.headers.location;
+          if ((res.statusCode === 302 || res.statusCode === 301) && loc) {
+            const tag = loc.split('/').pop() || '';
+            if (tag) {
+              resolve({
+                tag_name: tag,
+                name: `VictusClient ${tag}`,
+                body: '',
+                published_at: new Date().toISOString(),
+                assets: [
+                  {
+                    name: 'VictusClient-Setup.exe',
+                    browser_download_url: `https://github.com/${this.repoOwner}/${this.repoName}/releases/download/${tag}/VictusClient-Setup.exe`,
+                    size: 10276864,
+                  },
+                  {
+                    name: 'app-asar.zip',
+                    browser_download_url: `https://github.com/${this.repoOwner}/${this.repoName}/releases/download/${tag}/app-asar.zip`,
+                    size: 9993688,
+                  },
+                ],
+              });
+              return;
+            }
+          }
+          resolve(null);
         })
         .on('error', () => resolve(null));
     });
