@@ -7,8 +7,8 @@ function getGitHubToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
   try {
     const remoteUrl = execSync('git config --get remote.origin.url', { encoding: 'utf8' }).trim();
-    const match = remoteUrl.match(/:([^@]+)@/);
-    if (match) return match[1];
+    const u = new URL(remoteUrl);
+    if (u.password) return u.password;
   } catch {}
   return '';
 }
