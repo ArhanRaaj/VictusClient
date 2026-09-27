@@ -186,21 +186,23 @@ export class AutoUpdaterManager {
 
       if (process.platform === 'win32') {
         if (lower.endsWith('.exe')) {
-          // Launch Windows installer executable with Windows shell
+          // Launch Windows installer executable after a 1-second delay so this process terminates cleanly
           try {
-            shell.openPath(updatePath);
-          } catch {
-            const child = spawn(updatePath, ['--updated'], {
-              detached: true,
-              shell: true,
-              stdio: 'ignore',
-            });
+            const child = spawn(
+              'cmd.exe',
+              ['/c', `timeout /t 1 /nobreak >nul & start "" "${updatePath}"`],
+              {
+                detached: true,
+                shell: true,
+                stdio: 'ignore',
+              }
+            );
             child.unref();
+          } catch {
+            shell.openPath(updatePath);
           }
 
-          setTimeout(() => {
-            app.quit();
-          }, 800);
+          app.exit(0);
           return { success: true };
         } else if (lower.endsWith('.zip')) {
           // If update package is a zip (such as app-asar.zip)

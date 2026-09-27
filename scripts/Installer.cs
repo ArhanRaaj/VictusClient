@@ -365,7 +365,7 @@ namespace VictusClientInstaller
             };
             badge.Child = new TextBlock
             {
-                Text = "v1.0.5 \u2022 Official",
+                Text = "v1.0.8 \u2022 Official",
                 FontSize = 10,
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(56, 189, 248))
@@ -643,7 +643,29 @@ namespace VictusClientInstaller
             try
             {
                 UpdateProgress(5, "Verifying installation environment...");
-                Thread.Sleep(250);
+                Thread.Sleep(200);
+
+                // Terminate any running VictusClient instances to release file locks on app.asar
+                UpdateProgress(10, "Closing running VictusClient instances...");
+                try
+                {
+                    int currentId = Process.GetCurrentProcess().Id;
+                    Process[] procs = Process.GetProcessesByName("VictusClient");
+                    foreach (Process proc in procs)
+                    {
+                        if (proc.Id != currentId)
+                        {
+                            try
+                            {
+                                proc.Kill();
+                                proc.WaitForExit(3000);
+                            }
+                            catch {}
+                        }
+                    }
+                }
+                catch {}
+                Thread.Sleep(800);
 
                 if (!Directory.Exists(installDir))
                 {
@@ -684,7 +706,7 @@ namespace VictusClientInstaller
                 if (!File.Exists(exePath))
                 {
                     UpdateProgress(25, "Fetching latest VictusClient runtime from GitHub...");
-                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup-1.0.5.exe";
+                    string downloadUrl = "https://github.com/ArhanRaaj/VictusClient/releases/latest/download/VictusClient-Setup.exe";
                     string tempExe = Path.Combine(Path.GetTempPath(), "VictusClient-Setup-Online.exe");
 
                     DownloadFileWithProgress(downloadUrl, tempExe, 25, 80);
@@ -741,7 +763,39 @@ namespace VictusClientInstaller
                     {
                         string dir = Path.GetDirectoryName(dest);
                         if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-                        entry.ExtractToFile(dest, true);
+
+                        bool written = false;
+                        for (int attempt = 0; attempt < 8; attempt++)
+                        {
+                            try
+                            {
+                                entry.ExtractToFile(dest, true);
+                                written = true;
+                                break;
+                            }
+                            catch (IOException)
+                            {
+                                // File locked by lingering process: kill any remaining VictusClient and wait
+                                try
+                                {
+                                    int currentId = Process.GetCurrentProcess().Id;
+                                    foreach (Process p in Process.GetProcessesByName("VictusClient"))
+                                    {
+                                        if (p.Id != currentId)
+                                        {
+                                            p.Kill();
+                                            p.WaitForExit(1000);
+                                        }
+                                    }
+                                }
+                                catch {}
+                                Thread.Sleep(800);
+                            }
+                        }
+                        if (!written)
+                        {
+                            entry.ExtractToFile(dest, true);
+                        }
                     }
                     current++;
                     if (current % 5 == 0 || current == total)
@@ -837,7 +891,7 @@ namespace VictusClientInstaller
                     {
                         string exePath = Path.Combine(installDir, "VictusClient.exe");
                         key.SetValue("DisplayName", "VictusClient");
-                        key.SetValue("DisplayVersion", "1.0.5");
+                        key.SetValue("DisplayVersion", "1.0.8");
                         key.SetValue("Publisher", "VictusClient Team");
                         key.SetValue("InstallLocation", installDir);
                         key.SetValue("DisplayIcon", exePath);
