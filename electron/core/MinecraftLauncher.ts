@@ -138,13 +138,13 @@ export class MinecraftLauncher {
       const realVersion = this.versionManager.resolveRealGameVersion(instance.version);
 
       // 1. Resolve Version JSON
-      const versionJson = await this.versionManager.getVersionJson(instance.version);
+      const versionJson = await this.versionManager.getVersionJson(realVersion);
 
       // 2. Resolve Client Jar
       const clientDownload = versionJson.downloads?.client;
-      const versionJarPath = path.join(this.versionsDir, instance.version, `${instance.version}.jar`);
+      const versionJarPath = path.join(this.versionsDir, realVersion, `${realVersion}.jar`);
       if (clientDownload && (!fs.existsSync(versionJarPath) || fs.statSync(versionJarPath).size === 0)) {
-        callbacks.onProgress({ instanceId: id, status: 'downloading', percent: 15, message: 'Downloading Minecraft client.jar...' });
+        callbacks.onProgress({ instanceId: id, status: 'downloading', percent: 15, message: `Downloading Minecraft client.jar (${realVersion})...` });
         await this.downloadFile(clientDownload.url, versionJarPath);
       }
 
@@ -329,10 +329,10 @@ export class MinecraftLauncher {
 
       const gameArgs = [
         '--username', username,
-        '--version', instance.version,
+        '--version', realVersion,
         '--gameDir', instance.gameDir,
         '--assetsDir', this.assetsDir,
-        '--assetIndex', versionJson.assetIndex?.id || instance.version,
+        '--assetIndex', versionJson.assetIndex?.id || realVersion,
         '--uuid', uuid,
         '--accessToken', token,
         '--userType', isMsa ? 'msa' : 'mojang',

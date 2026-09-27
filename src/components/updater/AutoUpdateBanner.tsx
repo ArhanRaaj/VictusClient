@@ -259,7 +259,7 @@ export const AutoUpdateBanner: React.FC = () => {
               {updateInfo.releaseName || `VictusClient v${updateInfo.latestVersion}`}
             </h1>
             <p className="text-xs text-white/60 max-w-2xl leading-relaxed">
-              This release brings full Minecraft 26.4 support, an in-launcher Mods & Content Manager with strict version-locking, launcher startup fixes, and a refreshed dark obsidian interface without distracting gradients.
+              This release brings full Minecraft 26.4 (Snapshot 1) support, an in-launcher Mods & Content Manager with strict version-locking, launcher startup fixes, and a refreshed dark obsidian interface without distracting gradients.
             </p>
           </div>
 
@@ -300,16 +300,16 @@ export const AutoUpdateBanner: React.FC = () => {
         {/* TAB 1: KEY HIGHLIGHTS */}
         {activeTab === 'highlights' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Highlight 1: Minecraft 26.4 */}
+            {/* Highlight 1: Minecraft 26.4 Snapshot 1 */}
             <div className="p-5 rounded-2xl bg-[#0d0f18] border border-white/10 space-y-2">
               <div className="flex items-center space-x-2.5">
                 <div className="w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-violet-400">
                   <Zap className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-white">Minecraft 26.4 Support</h3>
+                <h3 className="text-sm font-bold text-white">Minecraft 26.4 (Snapshot 1) Support</h3>
               </div>
               <p className="text-xs text-white/60 leading-relaxed">
-                Full compatibility for Minecraft version 26.4, with automatic version resolution to Mojang's high-performance 1.21.4 runtime and Fabric mod loader integration.
+                Full native compatibility for Minecraft version 26.4 (Snapshot 1), downloading the official Mojang 26.4 client jar and full Fabric mod loader integration.
               </p>
             </div>
 
@@ -368,7 +368,7 @@ export const AutoUpdateBanner: React.FC = () => {
               <ul className="space-y-2 text-xs text-white/70">
                 <li className="flex items-start space-x-2">
                   <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong>Minecraft 26.4 Support:</strong> Added official 26.4 version support across Instance Wizard, Servers, and Content Manager.</span>
+                  <span><strong>Minecraft 26.4 (Snapshot 1) Support:</strong> Added official 26.4 Snapshot 1 version support across Instance Wizard, Servers, and Content Manager.</span>
                 </li>
                 <li className="flex items-start space-x-2">
                   <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />

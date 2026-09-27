@@ -57,34 +57,49 @@ export class VersionManager {
 
   public resolveRealGameVersion(versionId: string): string {
     const v = (versionId || '').trim();
-    if (v.startsWith('26.') || v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
+    if (
+      v === '26.4' ||
+      v === '26.4 Snapshot 1' ||
+      v === '26.4-snapshot-1' ||
+      v.toLowerCase().includes('26.4')
+    ) {
+      return '26.4-snapshot-1';
+    }
+    if (v === '26.3' || v.startsWith('26.3')) return '26.3';
+    if (v === '26.2' || v.startsWith('26.2')) return '26.2';
+    if (v === '26.1' || v.startsWith('26.1')) return '26.1';
+    if (v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
     if (v === '1.20.8' || v === '1.20') return '1.20.4';
     if (v === '1.8') return '1.8.9';
-    return v || '1.21.4';
+    return v || '26.4-snapshot-1';
   }
 
   public async getVersionJson(versionId: string): Promise<any> {
-    const versionFile = path.join(this.versionsDir, versionId, `${versionId}.json`);
+    const realVer = this.resolveRealGameVersion(versionId);
+    const versionFile = path.join(this.versionsDir, realVer, `${realVer}.json`);
     if (fs.existsSync(versionFile)) {
-      return JSON.parse(fs.readFileSync(versionFile, 'utf-8'));
+      try {
+        const parsed = JSON.parse(fs.readFileSync(versionFile, 'utf-8'));
+        if (parsed && parsed.id === realVer) {
+          return parsed;
+        }
+      } catch {}
     }
 
     const manifest = await this.getManifest();
-    let entry = manifest.versions.find((v) => v.id === versionId);
-    if (!entry || !entry.url) {
-      const realVer = this.resolveRealGameVersion(versionId);
-      entry = manifest.versions.find((v) => v.id === realVer);
-    }
+    let entry = manifest.versions.find((v) => v.id === realVer)
+      || manifest.versions.find((v) => v.id === versionId)
+      || manifest.versions.find((v) => v.id.startsWith(versionId));
 
     if (!entry || !entry.url) {
-      throw new Error(`Minecraft version ${versionId} not found in official manifest`);
+      throw new Error(`Minecraft version ${versionId} (${realVer}) not found in official manifest`);
     }
 
     const res = await fetch(entry.url);
-    if (!res.ok) throw new Error(`Failed to download version metadata for ${versionId}`);
+    if (!res.ok) throw new Error(`Failed to download version metadata for ${realVer}`);
     const data = await res.json();
 
-    const dir = path.join(this.versionsDir, versionId);
+    const dir = path.join(this.versionsDir, realVer);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(versionFile, JSON.stringify(data, null, 2), 'utf-8');
     return data;

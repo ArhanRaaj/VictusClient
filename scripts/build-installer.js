@@ -18,7 +18,7 @@ if (!fs.existsSync(releaseDir)) fs.mkdirSync(releaseDir, { recursive: true });
 
 console.log('1. Building frontend and electron core with latest assets...');
 try {
-  execSync('npm run build', { cwd: rootDir, stdio: 'inherit' });
+  execSync('cmd.exe /c "npm run build"', { cwd: rootDir, stdio: 'inherit' });
   execSync('node scripts/pack-asar.js', { cwd: rootDir, stdio: 'inherit' });
 } catch (e) {
   console.warn('Note: build step finished with output:', e.message);

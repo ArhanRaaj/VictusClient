@@ -95,7 +95,18 @@ export class ModrinthManager {
   public resolveRealVersion(version?: string): string | undefined {
     if (!version) return undefined;
     const v = version.trim();
-    if (v.startsWith('26.') || v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
+    if (
+      v === '26.4' ||
+      v === '26.4 Snapshot 1' ||
+      v === '26.4-snapshot-1' ||
+      v.toLowerCase().includes('26.4')
+    ) {
+      return '26.4-snapshot-1';
+    }
+    if (v === '26.3' || v.startsWith('26.3')) return '26.3';
+    if (v === '26.2' || v.startsWith('26.2')) return '26.2';
+    if (v === '26.1' || v.startsWith('26.1')) return '26.1';
+    if (v === '1.21.11' || v === '1.21.8' || v === '1.21') return '1.21.4';
     if (v === '1.20.8' || v === '1.20') return '1.20.4';
     if (v === '1.8') return '1.8.9';
     return v;

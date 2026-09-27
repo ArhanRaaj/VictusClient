@@ -260,7 +260,7 @@ export class AutoUpdaterManager {
   private formatReleaseNotes(rawBody: string | undefined, tag: string): string {
     const defaultNotes = [
       '### ✨ What\'s New in VictusClient v' + tag,
-      '- **Minecraft 26.4 Support**: Full native support for Minecraft 26.4 mapped to high-performance Mojang 1.21.4 engine.',
+      '- **Minecraft 26.4 (Snapshot 1) Support**: Full native support for Minecraft 26.4 (26.4-snapshot-1) with official Mojang client runtime and Fabric compatibility.',
       '- **Mods & Content Manager**: Browse, filter, and install Fabric/Forge mods, shaders, and resource packs directly inside the launcher.',
       '- **Strict Instance Version Lock**: Content downloads automatically match and lock to the active instance Minecraft version & loader.',
       '- **Instant Directory Access**: 1-click button to open instance mods/shaders folder in Windows Explorer.',
