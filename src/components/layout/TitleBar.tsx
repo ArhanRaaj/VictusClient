@@ -14,10 +14,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
   const { theme } = useTheme();
   const accentColor = theme.sidebarColor || theme.primaryAccent || '#7c3aed';
   const [isMaximized, setIsMaximized] = useState(false);
+  const [appVersion, setAppVersion] = useState('v1.0.6');
 
   useEffect(() => {
     if (isElectron && window.electronAPI) {
       window.electronAPI.isWindowMaximized().then(setIsMaximized);
+      window.electronAPI.getAppVersion?.().then((v) => {
+        if (v) setAppVersion(`v${v}`);
+      }).catch(() => {});
     }
   }, [isElectron]);
 
@@ -50,7 +54,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onOpenSearch, activeTab, set
             Victus<span style={{ color: accentColor }}>Client</span>
           </span>
           <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-md bg-white/[0.06] text-white/50 border border-white/5">
-            v1.0.5
+            {appVersion}
           </span>
         </div>
       </div>

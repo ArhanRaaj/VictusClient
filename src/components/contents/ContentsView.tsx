@@ -558,13 +558,13 @@ export const ContentsView: React.FC = () => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setInstanceDropdownOpen(!instanceDropdownOpen)}
-              className="flex items-center space-x-3 px-4 py-2.5 rounded-2xl bg-[#141624] border border-cyan-500/30 hover:border-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all text-left group"
+              className="flex items-center space-x-3 px-4 py-2.5 rounded-2xl bg-[#141624] border border-white/15 hover:border-white/30 shadow-md transition-all text-left group"
             >
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center text-sm shadow-md flex-shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-[#1d2033] border border-white/10 flex items-center justify-center text-sm shadow-sm flex-shrink-0">
                 {activeInstance?.icon || '⚡'}
               </div>
               <div className="overflow-hidden">
-                <div className="text-[10px] uppercase font-bold tracking-wider text-cyan-400 flex items-center space-x-1.5">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-white/50 flex items-center space-x-1.5">
                   <span>Target Instance</span>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
@@ -599,7 +599,7 @@ export const ContentsView: React.FC = () => {
                         }}
                         className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all ${
                           isSelected
-                            ? 'bg-gradient-to-r from-cyan-500/20 to-purple-600/20 border border-cyan-500/40 text-white'
+                            ? 'bg-white/10 border border-white/20 text-white font-bold'
                             : 'hover:bg-white/5 text-white/70 hover:text-white border border-transparent'
                         }`}
                       >
@@ -612,7 +612,7 @@ export const ContentsView: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
+                        {isSelected && <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
                       </button>
                     );
                   })}
@@ -646,14 +646,14 @@ export const ContentsView: React.FC = () => {
               }}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${
                 activeCategory === cat.id
-                  ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.35)]'
+                  ? 'bg-white text-black border-white shadow-md'
                   : 'bg-[#121422]/70 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
               }`}
             >
               <span>{cat.icon}</span>
               <span>{cat.label}</span>
               {installedMods.length > 0 && activeCategory === cat.id && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+                <span className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${activeCategory === cat.id ? 'bg-black/15 text-black' : 'bg-white/20'}`}>
                   {installedMods.length}
                 </span>
               )}
@@ -667,7 +667,7 @@ export const ContentsView: React.FC = () => {
             onClick={() => setActiveSubTab('browse')}
             className={`px-4 py-2 rounded-xl font-bold transition-all ${
               activeSubTab === 'browse'
-                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
+                ? 'bg-white/15 text-white shadow-sm'
                 : 'text-white/50 hover:text-white'
             }`}
           >
@@ -677,7 +677,7 @@ export const ContentsView: React.FC = () => {
             onClick={() => setActiveSubTab('installed')}
             className={`px-4 py-2 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${
               activeSubTab === 'installed'
-                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-md'
+                ? 'bg-white/15 text-white shadow-sm'
                 : 'text-white/50 hover:text-white'
             }`}
           >
@@ -755,7 +755,7 @@ export const ContentsView: React.FC = () => {
               {selectedIds.size > 0 && (
                 <button
                   onClick={handleInstallSelected}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)] flex items-center space-x-2 animate-pulse"
+                  className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold uppercase tracking-wider shadow-md flex items-center space-x-2 transition-all cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   <span>Install ({selectedIds.size})</span>
@@ -811,8 +811,8 @@ export const ContentsView: React.FC = () => {
                     key={item.id}
                     className={`group rounded-2xl p-4 border transition-all flex flex-col justify-between min-h-[184px] backdrop-blur-xl ${
                       isSelected
-                        ? 'border-cyan-400 bg-cyan-950/20 shadow-[0_0_20px_rgba(6,182,212,0.25)]'
-                        : 'bg-[#121422]/80 border-white/[0.08] hover:border-cyan-500/30 hover:bg-[#15182a] hover:shadow-lg'
+                        ? 'border-white/30 bg-[#161828] shadow-md'
+                        : 'bg-[#121422]/80 border-white/[0.08] hover:border-white/20 hover:bg-[#151726] hover:shadow-lg'
                     }`}
                   >
                     {/* Top Content */}
@@ -826,12 +826,12 @@ export const ContentsView: React.FC = () => {
                               className="w-12 h-12 rounded-2xl object-cover bg-black/40 flex-shrink-0 border border-white/10 shadow-md group-hover:scale-105 transition-transform"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-purple-600/20 border border-cyan-500/30 text-cyan-300 flex items-center justify-center font-bold text-xl flex-shrink-0">
+                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 text-white/80 flex items-center justify-center font-bold text-xl flex-shrink-0">
                               {item.title.charAt(0)}
                             </div>
                           )}
                           <div className="overflow-hidden">
-                            <h3 className="font-bold text-sm text-white group-hover:text-cyan-300 transition-colors truncate">
+                            <h3 className="font-bold text-sm text-white group-hover:text-white transition-colors truncate">
                               {item.title}
                             </h3>
                             <div className="text-[11px] text-white/50 truncate">
@@ -858,7 +858,7 @@ export const ContentsView: React.FC = () => {
                           className="text-white/30 hover:text-white p-1"
                         >
                           {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-cyan-400" />
+                            <CheckSquare className="w-4 h-4 text-white" />
                           ) : (
                             <Square className="w-4 h-4" />
                           )}
@@ -902,7 +902,7 @@ export const ContentsView: React.FC = () => {
                         {installed ? (
                           <button
                             onClick={() => setActiveSubTab('installed')}
-                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 transition-all shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                            className="px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 transition-all shadow-sm"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Installed</span>
@@ -914,7 +914,7 @@ export const ContentsView: React.FC = () => {
                             className={`px-4 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-all shadow-md ${
                               isInstalling
                                 ? 'bg-amber-600/70 text-white cursor-wait'
-                                : 'bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-[1.02]'
+                                : 'bg-violet-600 hover:bg-violet-500 text-white shadow-sm hover:scale-[1.02] active:scale-95'
                             }`}
                           >
                             {isInstalling ? (
@@ -965,7 +965,7 @@ export const ContentsView: React.FC = () => {
                     setQuery('');
                     fetchContent('', activeCategory);
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold transition-all shadow-[0_0_15px_rgba(6,182,212,0.35)]"
+                  className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/15"
                 >
                   Browse Popular {categories.find((c) => c.id === activeCategory)?.label}
                 </button>
@@ -1118,7 +1118,7 @@ export const ContentsView: React.FC = () => {
               </p>
               <button
                 onClick={() => setActiveSubTab('browse')}
-                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.35)]"
+                className="px-5 py-2.5 rounded-2xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold uppercase tracking-wider shadow-md transition-all cursor-pointer active:scale-95"
               >
                 Browse & Install Now
               </button>

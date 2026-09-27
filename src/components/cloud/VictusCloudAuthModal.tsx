@@ -51,8 +51,8 @@ export const VictusCloudAuthModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-view-fade-in select-none">
       <div className="w-full max-w-md bg-[#0c0d16] border border-white/15 rounded-[28px] p-6 shadow-2xl relative overflow-hidden">
-        {/* Top Glow */}
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400 shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
+        {/* Top Accent Line */}
+        <div className="absolute top-0 inset-x-0 h-1 bg-violet-600/70" />
 
         {/* Close Button */}
         <button
@@ -64,15 +64,15 @@ export const VictusCloudAuthModal: React.FC = () => {
 
         {/* Modal Brand Header */}
         <div className="flex items-center space-x-3 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border border-purple-400/30 flex items-center justify-center text-purple-300 shadow-inner">
-            <Server className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-2xl bg-[#1c1f30] border border-white/10 flex items-center justify-center text-white shadow-sm">
+            <Server className="w-6 h-6 text-violet-400" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="font-display font-black text-xl text-white tracking-tight">
                 Victus Cloud Bridge
               </h2>
-              <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/25">
+              <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/10">
                 panel.victusclient.net
               </span>
             </div>
@@ -114,7 +114,7 @@ export const VictusCloudAuthModal: React.FC = () => {
             <button
               onClick={handleQuickConnect}
               disabled={isLoading}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.35)] transition-all cursor-pointer flex items-center space-x-1.5 active:scale-95"
+              className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center space-x-1.5 active:scale-95"
             >
               <Zap className="w-3.5 h-3.5 fill-current" />
               <span>1-Click Connect</span>

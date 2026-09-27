@@ -75,11 +75,10 @@ namespace VictusClientInstaller
             else
             {
                 this.Cursor = Cursors.Hand;
-                Color c1 = this.IsMouseOver ? Color.FromRgb(34, 211, 238) : Color.FromRgb(6, 182, 212);
-                Color c2 = this.IsMouseOver ? Color.FromRgb(192, 132, 252) : Color.FromRgb(147, 51, 234);
-                _border.Background = new LinearGradientBrush(c1, c2, 0.0);
+                Color bg = this.IsMouseOver ? Color.FromRgb(139, 92, 246) : Color.FromRgb(124, 58, 237);
+                _border.Background = new SolidColorBrush(bg);
                 _border.BorderThickness = new Thickness(0);
-                _textBlock.Foreground = new SolidColorBrush(Color.FromRgb(6, 8, 14));
+                _textBlock.Foreground = Brushes.White;
             }
         }
     }
@@ -199,8 +198,8 @@ namespace VictusClientInstaller
         {
             if (_isChecked)
             {
-                _box.Background = new SolidColorBrush(Color.FromRgb(6, 182, 212));
-                _box.BorderBrush = new SolidColorBrush(Color.FromRgb(34, 211, 238));
+                _box.Background = new SolidColorBrush(Color.FromRgb(124, 58, 237));
+                _box.BorderBrush = new SolidColorBrush(Color.FromRgb(139, 92, 246));
                 _check.Visibility = Visibility.Visible;
             }
             else
@@ -273,11 +272,7 @@ namespace VictusClientInstaller
                 CornerRadius = new CornerRadius(14),
                 BorderThickness = new Thickness(1),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(36, 42, 68)),
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(12, 14, 24),
-                    Color.FromRgb(8, 9, 16),
-                    90.0
-                ),
+                Background = new SolidColorBrush(Color.FromRgb(11, 13, 22)),
                 Effect = new DropShadowEffect
                 {
                     Color = Colors.Black,
@@ -296,19 +291,11 @@ namespace VictusClientInstaller
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Progress section
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Action deck
 
-            // Top gradient accent line (3px)
+            // Top solid accent line (2px)
             Border topAccent = new Border
             {
-                Height = 3,
-                Background = new LinearGradientBrush(
-                    new GradientStopCollection
-                    {
-                        new GradientStop(Color.FromRgb(6, 182, 212), 0.0),
-                        new GradientStop(Color.FromRgb(139, 92, 246), 0.5),
-                        new GradientStop(Color.FromRgb(236, 72, 153), 1.0)
-                    },
-                    0.0
-                )
+                Height = 2,
+                Background = new SolidColorBrush(Color.FromRgb(124, 58, 237))
             };
             Grid.SetRow(topAccent, 0);
             mainGrid.Children.Add(topAccent);
@@ -552,11 +539,7 @@ namespace VictusClientInstaller
                 CornerRadius = new CornerRadius(5),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Width = 0,
-                Background = new LinearGradientBrush(
-                    Color.FromRgb(6, 182, 212),
-                    Color.FromRgb(168, 85, 247),
-                    0.0
-                )
+                Background = new SolidColorBrush(Color.FromRgb(124, 58, 237))
             };
             progressTrack.Child = progressFill;
 
@@ -928,7 +911,7 @@ namespace VictusClientInstaller
     public class Program
     {
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
             Application app = new Application();
             ModernInstallerWindow win = new ModernInstallerWindow();

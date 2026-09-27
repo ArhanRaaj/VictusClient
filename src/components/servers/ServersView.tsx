@@ -499,7 +499,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ setActiveTab }) => {
 
           <div className="w-32 bg-white/10 h-1.5 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400"
+              className="h-full rounded-full transition-all duration-500 bg-violet-500"
               style={{ width: `${ramUsagePercent}%` }}
             />
           </div>

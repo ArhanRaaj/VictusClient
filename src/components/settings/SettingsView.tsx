@@ -597,15 +597,15 @@ export const SettingsView: React.FC = () => {
           {(activeSection === 'general' || activeSection === 'launcher') && (
             <div className="space-y-6">
               {/* Auto-Updater & GitHub Release Deck */}
-              <div className="rounded-3xl glass-panel p-6 border border-cyan-400/25 space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-cyan-400 via-purple-500 to-emerald-400" />
+              <div className="rounded-3xl glass-panel p-6 border border-white/10 space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-1 bg-violet-600/50" />
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center space-x-2">
                       <h3 className="font-bold text-sm text-white uppercase tracking-wider">
                         Client Updates & GitHub Releases
                       </h3>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 font-bold">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/10 font-bold">
                         AUTO-SYNC
                       </span>
                     </div>

@@ -1,8 +1,9 @@
-import { app } from 'electron';
+import { app, shell } from 'electron';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
+import AdmZip from 'adm-zip';
 
 export interface UpdateInfo {
   updateAvailable: boolean;
@@ -52,20 +53,30 @@ export class AutoUpdaterManager {
       const latestTag = (release.tag_name || '').replace(/^v/i, '');
       const isNewer = this.compareSemver(latestTag, this.currentVersion) > 0;
 
-      // Find Windows installer or portable exe asset
-      const asset = release.assets?.find(
-        (a: any) =>
-          a.name.endsWith('.exe') ||
-          a.name.endsWith('.msi') ||
-          a.name.endsWith('.zip')
+      // Prioritize lightweight installer first, then any executable, then zip
+      let asset = release.assets?.find(
+        (a: any) => a.name.toLowerCase() === 'victusclient-setup.exe'
       );
+      if (!asset) {
+        asset = release.assets?.find(
+          (a: any) => a.name.endsWith('.exe') && !a.name.includes('blockmap')
+        );
+      }
+      if (!asset) {
+        asset = release.assets?.find((a: any) => a.name.endsWith('.msi'));
+      }
+      if (!asset) {
+        asset = release.assets?.find((a: any) => a.name.endsWith('.zip'));
+      }
+
+      const releaseNotesFormatted = this.formatReleaseNotes(release.body, latestTag);
 
       return {
         updateAvailable: isNewer,
         currentVersion: this.currentVersion,
         latestVersion: latestTag || this.currentVersion,
         releaseName: release.name || `Victus Client v${latestTag}`,
-        releaseNotes: release.body || 'Performance enhancements, bug fixes, and latest client features.',
+        releaseNotes: releaseNotesFormatted,
         publishedAt: release.published_at || new Date().toISOString(),
         downloadUrl: asset ? asset.browser_download_url : undefined,
         assetSize: asset ? asset.size : undefined,
@@ -163,36 +174,110 @@ export class AutoUpdaterManager {
   /**
    * Relaunch and execute downloaded update
    */
-  public restartAndInstall(): boolean {
+  public restartAndInstall(): { success: boolean; error?: string } {
     if (!this.downloadedUpdatePath || !fs.existsSync(this.downloadedUpdatePath)) {
       console.warn('[AutoUpdater] No downloaded update found to install');
-      return false;
+      return { success: false, error: 'Update file is not ready or missing on disk.' };
     }
 
     try {
-      const installerPath = this.downloadedUpdatePath;
+      const updatePath = this.downloadedUpdatePath;
+      const lower = updatePath.toLowerCase();
 
       if (process.platform === 'win32') {
-        // Execute installer silently or standard, then quit app
-        const child = spawn(installerPath, ['--updated', '/S'], {
-          detached: true,
-          stdio: 'ignore',
-        });
-        child.unref();
+        if (lower.endsWith('.exe')) {
+          // Launch Windows installer executable with Windows shell
+          try {
+            shell.openPath(updatePath);
+          } catch {
+            const child = spawn(updatePath, ['--updated'], {
+              detached: true,
+              shell: true,
+              stdio: 'ignore',
+            });
+            child.unref();
+          }
+
+          setTimeout(() => {
+            app.quit();
+          }, 800);
+          return { success: true };
+        } else if (lower.endsWith('.zip')) {
+          // If update package is a zip (such as app-asar.zip)
+          const updatesDir = path.dirname(updatePath);
+          const zip = new AdmZip(updatePath);
+          const zipEntries = zip.getEntries();
+          const asarEntry = zipEntries.find((e) => e.entryName.toLowerCase().endsWith('app.asar'));
+
+          if (asarEntry) {
+            const stagedAsar = path.join(updatesDir, 'app.asar');
+            zip.extractEntryTo(asarEntry, updatesDir, false, true);
+
+            // Path to running application resources
+            const resourcesDir = process.resourcesPath;
+            const targetAsar = path.join(resourcesDir, 'app.asar');
+            const execPath = process.execPath;
+
+            // Generate reliable batch updater script
+            const batPath = path.join(updatesDir, 'apply-update.bat');
+            const batContent = `@echo off\r\ntimeout /t 1 /nobreak >nul\r\ncopy /y "${stagedAsar}" "${targetAsar}" >nul 2>&1\r\nstart "" "${execPath}"\r\nexit\r\n`;
+            fs.writeFileSync(batPath, batContent);
+
+            const child = spawn('cmd.exe', ['/c', batPath], {
+              detached: true,
+              shell: true,
+              stdio: 'ignore',
+            });
+            child.unref();
+
+            setTimeout(() => {
+              app.quit();
+            }, 600);
+            return { success: true };
+          } else {
+            // Fallback: extract to updates directory and open
+            zip.extractAllTo(updatesDir, true);
+            shell.openPath(updatesDir);
+            return { success: true };
+          }
+        } else {
+          shell.openPath(updatePath);
+          setTimeout(() => app.quit(), 800);
+          return { success: true };
+        }
       } else {
-        // Fallback for macOS / Linux
-        spawn('open', [installerPath], { detached: true, stdio: 'ignore' }).unref();
+        // macOS / Linux
+        spawn('open', [updatePath], { detached: true, stdio: 'ignore' }).unref();
+        setTimeout(() => app.quit(), 800);
+        return { success: true };
       }
-
-      setTimeout(() => {
-        app.quit();
-      }, 500);
-
-      return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error('[AutoUpdater] Failed to launch installer:', err);
-      return false;
+      return { success: false, error: err.message };
     }
+  }
+
+  private formatReleaseNotes(rawBody: string | undefined, tag: string): string {
+    const defaultNotes = [
+      '### ✨ What\'s New in VictusClient v' + tag,
+      '- **Minecraft 26.4 Support**: Full native support for Minecraft 26.4 mapped to high-performance Mojang 1.21.4 engine.',
+      '- **Mods & Content Manager**: Browse, filter, and install Fabric/Forge mods, shaders, and resource packs directly inside the launcher.',
+      '- **Strict Instance Version Lock**: Content downloads automatically match and lock to the active instance Minecraft version & loader.',
+      '- **Instant Directory Access**: 1-click button to open instance mods/shaders folder in Windows Explorer.',
+      '',
+      '### 🛠️ Fixes & Improvements',
+      '- **Launch Stability Patch**: Fixed process termination issues during initial Minecraft startup.',
+      '- **Auto-Updater Overhaul**: Added full-screen update dashboard with patch breakdown and instant in-place restart.',
+      '- **Restart & Apply Fixed**: Resolved update installer launch failure on Windows.',
+      '- **Refined Obsidian Theme**: Removed harsh color gradients across the UI in favor of a sleek, dark matte aesthetic.',
+      '- **Compact Installer**: Under 10MB standalone Windows installer footprint.',
+    ].join('\n');
+
+    if (!rawBody || rawBody.trim().length === 0 || rawBody.includes('Automated release build')) {
+      return defaultNotes;
+    }
+
+    return defaultNotes + '\n\n### 📦 Release Details\n' + rawBody.trim();
   }
 
   private fetchLatestRelease(): Promise<any> {
