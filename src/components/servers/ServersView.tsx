@@ -22,7 +22,6 @@ import { CloudServer } from '../../types/servers';
 import { useLauncher } from '../../context/LauncherContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useVictusCloud } from '../../context/VictusCloudContext';
-import { CloudAuthModal } from './CloudAuthModal';
 
 interface ServersViewProps {
   setActiveTab?: (tab: string) => void;
@@ -525,9 +524,6 @@ export const ServersView: React.FC<ServersViewProps> = () => {
           })}
         </div>
       )}
-
-      {/* Cloud Authentication Modal */}
-      <CloudAuthModal />
     </div>
   );
 };

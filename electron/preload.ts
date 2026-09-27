@@ -80,8 +80,9 @@ export interface IElectronAPI {
   onUpdateProgress: (callback: (progress: any) => void) => () => void;
 
   // Victus Cloud
-  victusCloudStartWebAuth: () => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
+  victusCloudStartWebAuth: (mode?: 'login' | 'signup') => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
   victusCloudCancelWebAuth: () => Promise<boolean>;
+  victusCloudLogout: () => Promise<boolean>;
   victusCloudLoginCredentials: (email: string, password: string) => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
   victusCloudGetProfile: (idOrEmail: string) => Promise<any>;
   victusCloudGetServers: (email: string) => Promise<any[]>;
@@ -168,8 +169,9 @@ const api: IElectronAPI = {
   },
 
   // Victus Cloud
-  victusCloudStartWebAuth: () => ipcRenderer.invoke('victus-cloud-start-web-auth'),
+  victusCloudStartWebAuth: (mode?: 'login' | 'signup') => ipcRenderer.invoke('victus-cloud-start-web-auth', mode),
   victusCloudCancelWebAuth: () => ipcRenderer.invoke('victus-cloud-cancel-web-auth'),
+  victusCloudLogout: () => ipcRenderer.invoke('victus-cloud-logout'),
   victusCloudLoginCredentials: (email, password) => ipcRenderer.invoke('victus-cloud-login-credentials', email, password),
   victusCloudGetProfile: (idOrEmail) => ipcRenderer.invoke('victus-cloud-get-profile', idOrEmail),
   victusCloudGetServers: (email) => ipcRenderer.invoke('victus-cloud-get-servers', email),

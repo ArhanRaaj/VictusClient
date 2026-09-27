@@ -30,11 +30,11 @@ export const VictusCloudAuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
-  const handleBrowserLogin = async () => {
+  const handleBrowserLogin = async (mode: 'login' | 'signup' = 'login') => {
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      const ok = await loginWithBrowser();
+      const ok = await loginWithBrowser(mode);
       if (!ok) {
         setIsSubmitting(false);
       }
@@ -65,11 +65,7 @@ export const VictusCloudAuthModal: React.FC = () => {
   };
 
   const handleOpenSignup = () => {
-    if (window.electronAPI?.openExternal) {
-      window.electronAPI.openExternal('https://victuscloud.com/free');
-    } else {
-      window.open('https://victuscloud.com/free', '_blank');
-    }
+    handleBrowserLogin('signup');
   };
 
   return (
@@ -126,7 +122,7 @@ export const VictusCloudAuthModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Switcher: Browser Login vs Email Password */}
+        {/* Tab Switcher: Web & OAuth vs Direct Email/Password */}
         <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 mb-4">
           <button
             type="button"
@@ -138,7 +134,7 @@ export const VictusCloudAuthModal: React.FC = () => {
             }`}
           >
             <Globe className="w-3.5 h-3.5" />
-            <span>Browser Login</span>
+            <span>Web & OAuth</span>
           </button>
           <button
             type="button"
@@ -154,28 +150,28 @@ export const VictusCloudAuthModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Tab 1: Browser Redirect Login */}
+        {/* Tab 1: Web / OAuth Modal Flow */}
         {activeTab === 'browser' ? (
           <div className="space-y-4">
             <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/70 space-y-2">
               <div className="flex items-center space-x-2 text-purple-300 font-bold">
                 <Sparkles className="w-4 h-4" />
-                <span>One-Click Browser Connection</span>
+                <span>Victus Cloud Sign-In Window</span>
               </div>
               <p className="leading-relaxed text-[11px] text-white/60">
-                Click below to open <b>victuscloud.com</b> in your default browser. Once signed in, you'll be redirected back to Victus Client and your profile, coins, and servers will link automatically.
+                Opens the official Victus Cloud sign-in window. Supports Google, Discord, and Email logins. Once signed in, your account and free servers will link automatically.
               </p>
             </div>
 
             <button
-              onClick={handleBrowserLogin}
+              onClick={() => handleBrowserLogin('login')}
               disabled={isSubmitting}
               className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center space-x-2 shadow-[0_0_25px_rgba(168,85,247,0.4)] disabled:opacity-50 active:scale-98"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Waiting for browser callback...</span>
+                  <span>Waiting for sign in...</span>
                 </>
               ) : (
                 <>
@@ -250,8 +246,8 @@ export const VictusCloudAuthModal: React.FC = () => {
             onClick={handleOpenSignup}
             className="text-purple-400 hover:text-purple-300 font-bold flex items-center space-x-1 cursor-pointer transition-colors"
           >
-            <span>Create Free Server</span>
-            <ExternalLink className="w-3 h-3" />
+            <span>Create Free Account & Server</span>
+            <ArrowRight className="w-3 h-3" />
           </button>
         </div>
       </div>

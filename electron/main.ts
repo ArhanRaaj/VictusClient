@@ -365,12 +365,17 @@ ipcMain.handle('open-external', async (_, url) => {
 });
 
 // Victus Cloud IPC Handlers
-ipcMain.handle('victus-cloud-start-web-auth', async () => {
-  return victusCloud.startWebAuth();
+ipcMain.handle('victus-cloud-start-web-auth', async (_, mode?: 'login' | 'signup') => {
+  return victusCloud.startWebAuth(mainWindow, mode);
 });
 
 ipcMain.handle('victus-cloud-cancel-web-auth', async () => {
   victusCloud.cancelWebAuth();
+  return true;
+});
+
+ipcMain.handle('victus-cloud-logout', async () => {
+  await victusCloud.clearSession();
   return true;
 });
 

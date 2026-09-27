@@ -1,6 +1,6 @@
 import http from 'http';
 import https from 'https';
-import { shell } from 'electron';
+import { shell, BrowserWindow, session } from 'electron';
 
 export interface VictusCloudProfile {
   id: string;
@@ -50,234 +50,230 @@ export class VictusCloudManager {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdWl5d2R1amlucmtrcG9icHF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Mzc4NjI0MywiZXhwIjoyMDc5MzYyMjQzfQ.fTuoqYlvB_n5bxmvUfi5nAoD6ZS9DD1HaWvpW0cETnQ';
 
   private nodeConfigCache = new Map<number, NodeConfig>();
-  private authServer: http.Server | null = null;
-  private authServerPort = 3000;
-  private authTimeout: NodeJS.Timeout | null = null;
+  private activeAuthWindow: BrowserWindow | null = null;
+  private authPollTimer: NodeJS.Timeout | null = null;
 
   constructor() {}
 
   // -------------------------------------------------------------
-  // Web OAuth Loopback Server (http://localhost:3000/auth/callback)
+  // Native Electron Modal Auth Window (Victus Cloud Web & OAuth)
   // -------------------------------------------------------------
-  public startWebAuth(): Promise<{ success: boolean; profile?: VictusCloudProfile; accessToken?: string; error?: string }> {
+  public startWebAuth(
+    parentWindow?: BrowserWindow | null,
+    initialMode: 'login' | 'signup' = 'login'
+  ): Promise<{ success: boolean; profile?: VictusCloudProfile; accessToken?: string; error?: string }> {
     return new Promise((resolve) => {
       this.cancelWebAuth();
 
-      const server = http.createServer(async (req, res) => {
-        const reqUrl = new URL(req.url || '/', `http://localhost:${this.authServerPort}`);
+      let isResolved = false;
 
-        if (reqUrl.pathname === '/auth/callback') {
-          // Serve token catcher HTML
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <meta charset="utf-8"/>
-              <title>Victus Client - Account Linking</title>
-              <style>
-                body {
-                  margin: 0;
-                  padding: 0;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  min-height: 100vh;
-                  background-color: #08090d;
-                  color: #ffffff;
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                }
-                .container {
-                  background: #11131c;
-                  border: 1px solid rgba(255, 255, 255, 0.12);
-                  border-radius: 20px;
-                  padding: 40px;
-                  text-align: center;
-                  max-width: 440px;
-                  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-                }
-                .brand {
-                  display: inline-flex;
-                  align-items: center;
-                  gap: 10px;
-                  margin-bottom: 20px;
-                }
-                .brand span {
-                  font-size: 18px;
-                  font-weight: 900;
-                  letter-spacing: 0.15em;
-                  text-transform: uppercase;
-                }
-                .brand span b {
-                  color: #a855f7;
-                }
-                h2 {
-                  margin: 0 0 10px;
-                  font-size: 22px;
-                }
-                p {
-                  color: rgba(255, 255, 255, 0.6);
-                  font-size: 14px;
-                  line-height: 1.6;
-                  margin-bottom: 25px;
-                }
-                .badge {
-                  display: inline-block;
-                  padding: 8px 20px;
-                  border-radius: 9999px;
-                  background: rgba(52, 211, 153, 0.15);
-                  border: 1px solid rgba(52, 211, 153, 0.3);
-                  color: #34d399;
-                  font-weight: 700;
-                  font-size: 13px;
-                }
-                .loader {
-                  display: inline-block;
-                  width: 32px;
-                  height: 32px;
-                  border: 3px solid rgba(255, 255, 255, 0.2);
-                  border-radius: 50%;
-                  border-top-color: #a855f7;
-                  animation: spin 1s ease-in-out infinite;
-                  margin-bottom: 15px;
-                }
-                @keyframes spin {
-                  to { transform: rotate(360deg); }
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="brand">
-                  <span>Victus<b>Client</b> &bull; Cloud</span>
-                </div>
-                <div id="loader" class="loader"></div>
-                <h2 id="title">Linking Victus Cloud...</h2>
-                <p id="desc">Connecting your browser session to Victus Client. Please wait a moment.</p>
-                <div id="badge" class="badge" style="display: none;">Account Successfully Linked</div>
-              </div>
-              <script>
-                const hash = window.location.hash.substring(1);
-                const search = window.location.search.substring(1);
-                const params = new URLSearchParams(hash || search);
-                const accessToken = params.get('access_token');
-                const refreshToken = params.get('refresh_token');
-                const code = params.get('code');
-
-                fetch('/auth/token', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ accessToken, refreshToken, code, hash, search: window.location.search })
-                })
-                .then(r => r.json())
-                .then(data => {
-                  document.getElementById('loader').style.display = 'none';
-                  document.getElementById('title').innerText = 'Welcome Back!';
-                  document.getElementById('desc').innerText = 'Your Victus Cloud account and servers are now linked. You can safely close this tab.';
-                  document.getElementById('badge').style.display = 'inline-block';
-                  setTimeout(() => { try { window.close(); } catch(e) {} }, 2500);
-                })
-                .catch(err => {
-                  document.getElementById('loader').style.display = 'none';
-                  document.getElementById('title').innerText = 'Linked!';
-                  document.getElementById('desc').innerText = 'Handshake finished. Return to Victus Client.';
-                  document.getElementById('badge').style.display = 'inline-block';
-                });
-              </script>
-            </body>
-            </html>
-          `);
-          return;
-        }
-
-        if (reqUrl.pathname === '/auth/token' && req.method === 'POST') {
-          let body = '';
-          req.on('data', (c) => (body += c));
-          req.on('end', async () => {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ status: 'ok' }));
-
-            try {
-              const parsed = JSON.parse(body || '{}');
-              let accessToken = parsed.accessToken;
-
-              // If auth code provided, exchange it or inspect JWT
-              let email = '';
-              let userId = '';
-
-              if (accessToken) {
-                const payload = this.decodeJwt(accessToken);
-                email = payload?.email || '';
-                userId = payload?.sub || '';
-              }
-
-              if (!email && parsed.hash) {
-                const match = parsed.hash.match(/access_token=([^&]+)/);
-                if (match) {
-                  accessToken = decodeURIComponent(match[1]);
-                  const payload = this.decodeJwt(accessToken);
-                  email = payload?.email || '';
-                  userId = payload?.sub || '';
-                }
-              }
-
-              if (email || userId) {
-                const profile = await this.getUserProfile(email || userId);
-                this.cancelWebAuth();
-                resolve({ success: true, profile: profile || undefined, accessToken });
-              } else {
-                this.cancelWebAuth();
-                resolve({ success: false, error: 'Could not extract authentication token.' });
-              }
-            } catch (err: any) {
-              this.cancelWebAuth();
-              resolve({ success: false, error: err.message });
-            }
-          });
-          return;
-        }
-
-        res.writeHead(404);
-        res.end();
-      });
-
-      server.on('error', (err: any) => {
-        console.warn('[VictusCloudManager] Auth server error:', err.message);
-        this.cancelWebAuth();
-        resolve({ success: false, error: `Port ${this.authServerPort} unavailable: ${err.message}` });
-      });
-
-      server.listen(this.authServerPort, '127.0.0.1', () => {
-        this.authServer = server;
-        const targetRedirect = encodeURIComponent(`http://localhost:${this.authServerPort}/auth/callback`);
-        const loginUrl = `https://victuscloud.com/login?redirect=${targetRedirect}`;
-        if (shell && typeof shell.openExternal === 'function') {
-          shell.openExternal(loginUrl).catch((err) => {
-            console.warn('[VictusCloudManager] Failed to open external browser:', err);
-          });
-        }
-
-        // 3-minute timeout
-        this.authTimeout = setTimeout(() => {
-          if (this.authServer) {
-            this.cancelWebAuth();
-            resolve({ success: false, error: 'Login session timed out.' });
+      const finish = (result: {
+        success: boolean;
+        profile?: VictusCloudProfile;
+        accessToken?: string;
+        error?: string;
+      }) => {
+        if (!isResolved) {
+          isResolved = true;
+          if (this.authPollTimer) {
+            clearInterval(this.authPollTimer);
+            this.authPollTimer = null;
           }
-        }, 180000);
+          if (this.activeAuthWindow && !this.activeAuthWindow.isDestroyed()) {
+            try {
+              this.activeAuthWindow.destroy();
+            } catch {}
+          }
+          this.activeAuthWindow = null;
+          resolve(result);
+        }
+      };
+
+      const targetPath = initialMode === 'signup' ? '/signup' : '/login';
+      const targetUrl = `https://victuscloud.com${targetPath}`;
+
+      const authWin = new BrowserWindow({
+        width: 520,
+        height: 720,
+        minWidth: 440,
+        minHeight: 600,
+        title: initialMode === 'signup' ? 'Victus Cloud - Create Account' : 'Victus Cloud - Sign In',
+        parent: parentWindow && !parentWindow.isDestroyed() ? parentWindow : undefined,
+        modal: !!(parentWindow && !parentWindow.isDestroyed()),
+        show: false,
+        autoHideMenuBar: true,
+        backgroundColor: '#0a0a0f',
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
       });
+
+      this.activeAuthWindow = authWin;
+
+      // Chrome User-Agent prevents Google OAuth "403 disallowed_useragent"
+      const chromeUa =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+      authWin.webContents.setUserAgent(chromeUa);
+
+      authWin.loadURL(targetUrl);
+
+      authWin.once('ready-to-show', () => {
+        if (!isResolved && !authWin.isDestroyed()) {
+          authWin.show();
+        }
+      });
+
+      authWin.on('closed', () => {
+        finish({ success: false, error: 'Login window was closed.' });
+      });
+
+      const handleTokenExtracted = async (accessToken: string, userObj?: any) => {
+        if (isResolved) return;
+        try {
+          let email = userObj?.email || '';
+          let userId = userObj?.id || '';
+
+          if (!email || !userId) {
+            const payload = this.decodeJwt(accessToken);
+            if (payload) {
+              email = email || payload.email || '';
+              userId = userId || payload.sub || '';
+            }
+          }
+
+          if (email || userId) {
+            const profile = await this.getUserProfile(email || userId);
+            finish({
+              success: true,
+              accessToken,
+              profile: profile || {
+                id: userId || 'unknown',
+                email: email || '',
+                username: email ? email.split('@')[0] : 'VictusUser',
+                total_cp: 0,
+                cp_level: 1,
+                cp_tier: 'Starter',
+              },
+            });
+          } else {
+            finish({ success: false, error: 'Could not extract user details from session.' });
+          }
+        } catch (err: any) {
+          finish({ success: false, error: err.message || 'Failed to sync Victus Cloud profile.' });
+        }
+      };
+
+      const checkForAuth = async () => {
+        if (isResolved || authWin.isDestroyed()) return;
+
+        try {
+          // 1. Inspect window.localStorage
+          const stored = await authWin.webContents.executeJavaScript(`
+            (() => {
+              try {
+                for (let i = 0; i < localStorage.length; i++) {
+                  const k = localStorage.key(i);
+                  if (k && (k.includes('auth-token') || k.includes('supabase.auth') || k.startsWith('sb-'))) {
+                    const raw = localStorage.getItem(k);
+                    if (raw && raw.includes('access_token')) {
+                      const parsed = JSON.parse(raw);
+                      if (parsed && parsed.access_token) {
+                        return {
+                          accessToken: parsed.access_token,
+                          refreshToken: parsed.refresh_token,
+                          user: parsed.user || null
+                        };
+                      }
+                    }
+                  }
+                }
+              } catch(e) {}
+              return null;
+            })()
+          `);
+
+          if (stored && stored.accessToken) {
+            await handleTokenExtracted(stored.accessToken, stored.user);
+            return;
+          }
+
+          // 2. Inspect session cookies
+          const cookies = await authWin.webContents.session.cookies.get({ domain: 'victuscloud.com' });
+          for (const c of cookies) {
+            if (c.name.includes('auth-token')) {
+              try {
+                const decoded = decodeURIComponent(c.value);
+                if (decoded.includes('access_token')) {
+                  const parsed = JSON.parse(decoded);
+                  if (parsed && parsed.access_token) {
+                    await handleTokenExtracted(parsed.access_token, parsed.user);
+                    return;
+                  }
+                }
+              } catch {}
+            }
+          }
+
+          // 3. Inspect current URL (hash or query token)
+          const curUrl = authWin.webContents.getURL();
+          if (curUrl) {
+            try {
+              const u = new URL(curUrl);
+              const hashParams = new URLSearchParams(u.hash.substring(1));
+              const queryParams = u.searchParams;
+              const tokenFromUrl = hashParams.get('access_token') || queryParams.get('access_token');
+              if (tokenFromUrl) {
+                await handleTokenExtracted(tokenFromUrl);
+                return;
+              }
+            } catch {}
+          }
+        } catch {}
+      };
+
+      authWin.webContents.on('did-finish-load', () => {
+        checkForAuth();
+      });
+
+      authWin.webContents.on('did-navigate', () => {
+        checkForAuth();
+      });
+
+      authWin.webContents.on('did-navigate-in-page', () => {
+        checkForAuth();
+      });
+
+      // Regular check interval
+      this.authPollTimer = setInterval(() => {
+        checkForAuth();
+      }, 800);
     });
   }
 
   public cancelWebAuth(): void {
-    if (this.authTimeout) {
-      clearTimeout(this.authTimeout);
-      this.authTimeout = null;
+    if (this.authPollTimer) {
+      clearInterval(this.authPollTimer);
+      this.authPollTimer = null;
     }
-    if (this.authServer) {
+    if (this.activeAuthWindow && !this.activeAuthWindow.isDestroyed()) {
       try {
-        this.authServer.close();
+        this.activeAuthWindow.destroy();
       } catch {}
-      this.authServer = null;
+      this.activeAuthWindow = null;
+    }
+  }
+
+  public async clearSession(): Promise<void> {
+    try {
+      if (session?.defaultSession) {
+        await session.defaultSession.clearStorageData({
+          origin: 'https://victuscloud.com',
+          storages: ['cookies', 'localstorage'],
+        });
+      }
+    } catch (err) {
+      console.warn('[VictusCloudManager] Failed to clear session data:', err);
     }
   }
 

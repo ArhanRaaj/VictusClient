@@ -12,7 +12,7 @@ interface VictusCloudContextType {
   authPromptMessage: string;
   freeServers: CloudServer[];
   isServersLoading: boolean;
-  loginWithBrowser: () => Promise<boolean>;
+  loginWithBrowser: (mode?: 'login' | 'signup') => Promise<boolean>;
   loginWithCredentials: (email: string, pass: string) => Promise<boolean>;
   logout: () => void;
   requireCloudAuth: (message?: string, callback?: () => void) => boolean;
@@ -163,21 +163,23 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return () => clearInterval(interval);
   }, [cloudUser, refreshUserData, refreshServers]);
 
-  // Login with Browser (Redirect Handshake on http://localhost:3000/auth/callback)
-  const loginWithBrowser = async (): Promise<boolean> => {
+  // Login with Web / OAuth in-app window
+  const loginWithBrowser = async (mode: 'login' | 'signup' = 'login'): Promise<boolean> => {
     try {
       setSyncState((prev) => ({ ...prev, isSyncing: true }));
       if (!window.electronAPI?.victusCloudStartWebAuth) {
         throw new Error('Desktop bridge unavailable');
       }
 
-      const res = await window.electronAPI.victusCloudStartWebAuth();
+      const res = await window.electronAPI.victusCloudStartWebAuth(mode);
       if (!res.success || !res.profile) {
-        addNotification({
-          type: 'error',
-          title: 'Victus Cloud Login Cancelled',
-          message: res.error || 'Authentication process did not complete.',
-        });
+        if (res.error && res.error !== 'Login window was closed.') {
+          addNotification({
+            type: 'error',
+            title: 'Victus Cloud Login',
+            message: res.error,
+          });
+        }
         setSyncState((prev) => ({ ...prev, isSyncing: false }));
         return false;
       }
@@ -307,6 +309,9 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (window.electronAPI?.victusCloudCancelWebAuth) {
       window.electronAPI.victusCloudCancelWebAuth();
     }
+    if (window.electronAPI?.victusCloudLogout) {
+      window.electronAPI.victusCloudLogout().catch(() => {});
+    }
     setCloudUser(null);
     setFreeServers([]);
     localStorage.removeItem('victus_cloud_account');
@@ -365,6 +370,13 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Open Free Server Creation Page
   const openCreateFreeServer = () => {
+    if (!cloudUser) {
+      requireCloudAuth('Create an account or sign in with Victus Cloud to deploy your free server.', () => {
+        openCreateFreeServer();
+      });
+      return;
+    }
+
     if (window.electronAPI?.victusCloudOpenCreatePage) {
       window.electronAPI.victusCloudOpenCreatePage();
     } else if (window.electronAPI?.openExternal) {
