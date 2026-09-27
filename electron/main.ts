@@ -365,12 +365,20 @@ ipcMain.handle('open-external', async (_, url) => {
 });
 
 // Victus Cloud IPC Handlers
-ipcMain.handle('victus-cloud-start-web-auth', async (_, mode?: 'login' | 'signup') => {
-  return victusCloud.startWebAuth(mainWindow, mode);
+ipcMain.handle('victus-cloud-start-web-auth', async (_, customUsername?: string) => {
+  const activeAcc = configManager.loadAccounts().find((a) => a.isActive);
+  const username = customUsername || activeAcc?.username || 'VictusHero';
+  return victusCloud.startBrowserAuth(username, (info) => {
+    mainWindow?.webContents.send('victus-cloud-link-code', info);
+  });
+});
+
+ipcMain.handle('victus-cloud-get-link-info', async () => {
+  return victusCloud.getActiveLinkInfo();
 });
 
 ipcMain.handle('victus-cloud-cancel-web-auth', async () => {
-  victusCloud.cancelWebAuth();
+  victusCloud.cancelBrowserAuth();
   return true;
 });
 

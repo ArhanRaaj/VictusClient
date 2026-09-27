@@ -12,7 +12,10 @@ interface VictusCloudContextType {
   authPromptMessage: string;
   freeServers: CloudServer[];
   isServersLoading: boolean;
-  loginWithBrowser: (mode?: 'login' | 'signup') => Promise<boolean>;
+  activeLinkCode: string | null;
+  activeLinkUrl: string | null;
+  cancelBrowserAuth: () => void;
+  loginWithBrowser: () => Promise<boolean>;
   loginWithCredentials: (email: string, pass: string) => Promise<boolean>;
   logout: () => void;
   requireCloudAuth: (message?: string, callback?: () => void) => boolean;
@@ -27,7 +30,7 @@ interface VictusCloudContextType {
 const VictusCloudContext = createContext<VictusCloudContextType | undefined>(undefined);
 
 export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { addNotification } = useLauncher();
+  const { addNotification, activeAccount } = useLauncher();
 
   const [cloudUser, setCloudUser] = useState<VictusCloudUser | null>(() => {
     try {
@@ -50,6 +53,19 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState('Connect your Victus Cloud account to access this feature.');
   const [pendingCallback, setPendingCallback] = useState<(() => void) | null>(null);
+  const [activeLinkCode, setActiveLinkCode] = useState<string | null>(null);
+  const [activeLinkUrl, setActiveLinkUrl] = useState<string | null>(null);
+
+  // Listen for link codes from desktop core
+  useEffect(() => {
+    if (window.electronAPI?.onVictusCloudLinkCode) {
+      const unsub = window.electronAPI.onVictusCloudLinkCode((info) => {
+        setActiveLinkCode(info.code);
+        setActiveLinkUrl(info.url);
+      });
+      return unsub;
+    }
+  }, []);
 
   // Sync to local storage
   useEffect(() => {
@@ -163,17 +179,30 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return () => clearInterval(interval);
   }, [cloudUser, refreshUserData, refreshServers]);
 
-  // Login with Web / OAuth in-app window
-  const loginWithBrowser = async (mode: 'login' | 'signup' = 'login'): Promise<boolean> => {
+  // Cancel ongoing browser link session
+  const cancelBrowserAuth = useCallback(() => {
+    if (window.electronAPI?.victusCloudCancelWebAuth) {
+      window.electronAPI.victusCloudCancelWebAuth();
+    }
+    setActiveLinkCode(null);
+    setActiveLinkUrl(null);
+    setSyncState((prev) => ({ ...prev, isSyncing: false }));
+  }, []);
+
+  // Login with Browser (External browser with Passkey & Google SSO support via /mc-link)
+  const loginWithBrowser = async (): Promise<boolean> => {
     try {
       setSyncState((prev) => ({ ...prev, isSyncing: true }));
       if (!window.electronAPI?.victusCloudStartWebAuth) {
         throw new Error('Desktop bridge unavailable');
       }
 
-      const res = await window.electronAPI.victusCloudStartWebAuth(mode);
+      const res = await window.electronAPI.victusCloudStartWebAuth(activeAccount?.username || 'VictusClient');
+      setActiveLinkCode(null);
+      setActiveLinkUrl(null);
+
       if (!res.success || !res.profile) {
-        if (res.error && res.error !== 'Login window was closed.') {
+        if (res.error && !res.error.toLowerCase().includes('cancel') && !res.error.toLowerCase().includes('closed')) {
           addNotification({
             type: 'error',
             title: 'Victus Cloud Login',
@@ -188,7 +217,7 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const newUser: VictusCloudUser = {
         id: p.id,
         username: p.username,
-        email: p.email,
+        email: p.email || '',
         avatarUrl: p.avatar_url || `https://mc-heads.net/avatar/${encodeURIComponent(p.username)}/128`,
         tier: p.cp_tier || 'Starter',
         coins: typeof p.total_cp === 'number' ? p.total_cp : 0,
@@ -213,7 +242,7 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       addNotification({
         type: 'success',
-        title: 'Victus Cloud Account Linked',
+        title: 'Victus Cloud Linked',
         message: `Welcome, @${newUser.username}! Connected with ${newUser.coins.toLocaleString()} Coins.`,
       });
 
@@ -224,13 +253,15 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       return true;
     } catch (e: any) {
-      console.warn('[VictusCloud] Web auth error:', e);
+      console.warn('[VictusCloud] Browser auth error:', e);
+      setActiveLinkCode(null);
+      setActiveLinkUrl(null);
+      setSyncState((prev) => ({ ...prev, isSyncing: false }));
       addNotification({
         type: 'error',
         title: 'Authentication Error',
         message: e.message || 'Failed to authenticate with Victus Cloud.',
       });
-      setSyncState((prev) => ({ ...prev, isSyncing: false }));
       return false;
     }
   };
@@ -445,6 +476,9 @@ export const VictusCloudProvider: React.FC<{ children: React.ReactNode }> = ({ c
         authPromptMessage,
         freeServers,
         isServersLoading,
+        activeLinkCode,
+        activeLinkUrl,
+        cancelBrowserAuth,
         loginWithBrowser,
         loginWithCredentials,
         logout,

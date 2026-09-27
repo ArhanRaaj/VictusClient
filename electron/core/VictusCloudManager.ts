@@ -1,5 +1,6 @@
 import http from 'http';
 import https from 'https';
+import crypto from 'crypto';
 import { shell, BrowserWindow, session } from 'electron';
 
 export interface VictusCloudProfile {
@@ -50,221 +51,208 @@ export class VictusCloudManager {
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdWl5d2R1amlucmtrcG9icHF6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Mzc4NjI0MywiZXhwIjoyMDc5MzYyMjQzfQ.fTuoqYlvB_n5bxmvUfi5nAoD6ZS9DD1HaWvpW0cETnQ';
 
   private nodeConfigCache = new Map<number, NodeConfig>();
-  private activeAuthWindow: BrowserWindow | null = null;
-  private authPollTimer: NodeJS.Timeout | null = null;
+  private authPollInterval: NodeJS.Timeout | null = null;
+  private currentLinkCode: string | null = null;
+  private currentLinkUuid: string | null = null;
 
   constructor() {}
 
   // -------------------------------------------------------------
-  // Native Electron Modal Auth Window (Victus Cloud Web & OAuth)
+  // External Browser Web & Passkey Auth Flow (victuscloud.com/mc-link)
   // -------------------------------------------------------------
-  public startWebAuth(
-    parentWindow?: BrowserWindow | null,
-    initialMode: 'login' | 'signup' = 'login'
-  ): Promise<{ success: boolean; profile?: VictusCloudProfile; accessToken?: string; error?: string }> {
+  /**
+   * Opens the real default browser to victuscloud.com/mc-link?code=...
+   * Full native support for Passkeys (Windows Hello, biometric, hardware keys),
+   * Google Accounts, and existing browser sessions.
+   */
+  public async startBrowserAuth(
+    accountUsername?: string,
+    onCodeReady?: (info: { code: string; url: string }) => void
+  ): Promise<{
+    success: boolean;
+    profile?: VictusCloudProfile;
+    error?: string;
+  }> {
+    this.cancelBrowserAuth();
+
+    // 1. Generate an 8-character uppercase code (unambiguous charset)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    // 2. Generate a unique 32-character hex UUID for this session
+    const sessionUuid = crypto.randomBytes(16).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const username = (accountUsername || 'VictusClient').trim();
+
+    this.currentLinkCode = code;
+    this.currentLinkUuid = sessionUuid;
+
+    // 3. Insert token into Supabase minecraft_link_tokens
+    const insertRes = await this.httpsRequest(
+      `${this.supabaseUrl}/rest/v1/minecraft_link_tokens`,
+      'POST',
+      {
+        apikey: this.supabaseServiceKey,
+        Authorization: `Bearer ${this.supabaseServiceKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      {
+        code,
+        minecraft_uuid: sessionUuid,
+        minecraft_username: username,
+        online_mode: false,
+        server_id: 'client',
+        expires_at: expiresAt,
+        used: false,
+      }
+    );
+
+    if (insertRes.status > 299) {
+      return {
+        success: false,
+        error: 'Failed to initialize link token with Victus Cloud.',
+      };
+    }
+
+    const linkUrl = `https://victuscloud.com/mc-link?code=${code}`;
+
+    if (onCodeReady) {
+      onCodeReady({ code, url: linkUrl });
+    }
+
+    // 4. Open in the user's REAL default browser
+    if (shell && typeof shell.openExternal === 'function') {
+      shell.openExternal(linkUrl).catch((err) => {
+        console.warn('[VictusCloudManager] Failed to open external browser:', err);
+      });
+    }
+
+    // 5. Poll Supabase for user confirmation
     return new Promise((resolve) => {
-      this.cancelWebAuth();
+      let isDone = false;
 
-      let isResolved = false;
+      const cleanup = () => {
+        if (this.authPollInterval) {
+          clearInterval(this.authPollInterval);
+          this.authPollInterval = null;
+        }
+        if (this.currentLinkCode) {
+          const codeToDelete = this.currentLinkCode;
+          this.currentLinkCode = null;
+          this.currentLinkUuid = null;
+          this.httpsRequest(
+            `${this.supabaseUrl}/rest/v1/minecraft_link_tokens?code=eq.${codeToDelete}`,
+            'DELETE',
+            {
+              apikey: this.supabaseServiceKey,
+              Authorization: `Bearer ${this.supabaseServiceKey}`,
+            }
+          ).catch(() => {});
+        }
+      };
 
-      const finish = (result: {
-        success: boolean;
-        profile?: VictusCloudProfile;
-        accessToken?: string;
-        error?: string;
-      }) => {
-        if (!isResolved) {
-          isResolved = true;
-          if (this.authPollTimer) {
-            clearInterval(this.authPollTimer);
-            this.authPollTimer = null;
-          }
-          if (this.activeAuthWindow && !this.activeAuthWindow.isDestroyed()) {
-            try {
-              this.activeAuthWindow.destroy();
-            } catch {}
-          }
-          this.activeAuthWindow = null;
+      const finish = (result: { success: boolean; profile?: VictusCloudProfile; error?: string }) => {
+        if (!isDone) {
+          isDone = true;
+          cleanup();
           resolve(result);
         }
       };
 
-      const targetPath = initialMode === 'signup' ? '/signup' : '/login';
-      const targetUrl = `https://victuscloud.com${targetPath}`;
+      // Poll every 1.5 seconds for up to 5 minutes
+      const startTime = Date.now();
+      const maxDuration = 5 * 60 * 1000;
 
-      const authWin = new BrowserWindow({
-        width: 520,
-        height: 720,
-        minWidth: 440,
-        minHeight: 600,
-        title: initialMode === 'signup' ? 'Victus Cloud - Create Account' : 'Victus Cloud - Sign In',
-        parent: parentWindow && !parentWindow.isDestroyed() ? parentWindow : undefined,
-        modal: !!(parentWindow && !parentWindow.isDestroyed()),
-        show: false,
-        autoHideMenuBar: true,
-        backgroundColor: '#0a0a0f',
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true,
-        },
-      });
+      this.authPollInterval = setInterval(async () => {
+        if (isDone) return;
 
-      this.activeAuthWindow = authWin;
-
-      // Chrome User-Agent prevents Google OAuth "403 disallowed_useragent"
-      const chromeUa =
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
-      authWin.webContents.setUserAgent(chromeUa);
-
-      authWin.loadURL(targetUrl);
-
-      authWin.once('ready-to-show', () => {
-        if (!isResolved && !authWin.isDestroyed()) {
-          authWin.show();
+        if (Date.now() - startTime > maxDuration) {
+          finish({ success: false, error: 'Link request timed out after 5 minutes.' });
+          return;
         }
-      });
-
-      authWin.on('closed', () => {
-        finish({ success: false, error: 'Login window was closed.' });
-      });
-
-      const handleTokenExtracted = async (accessToken: string, userObj?: any) => {
-        if (isResolved) return;
-        try {
-          let email = userObj?.email || '';
-          let userId = userObj?.id || '';
-
-          if (!email || !userId) {
-            const payload = this.decodeJwt(accessToken);
-            if (payload) {
-              email = email || payload.email || '';
-              userId = userId || payload.sub || '';
-            }
-          }
-
-          if (email || userId) {
-            const profile = await this.getUserProfile(email || userId);
-            finish({
-              success: true,
-              accessToken,
-              profile: profile || {
-                id: userId || 'unknown',
-                email: email || '',
-                username: email ? email.split('@')[0] : 'VictusUser',
-                total_cp: 0,
-                cp_level: 1,
-                cp_tier: 'Starter',
-              },
-            });
-          } else {
-            finish({ success: false, error: 'Could not extract user details from session.' });
-          }
-        } catch (err: any) {
-          finish({ success: false, error: err.message || 'Failed to sync Victus Cloud profile.' });
-        }
-      };
-
-      const checkForAuth = async () => {
-        if (isResolved || authWin.isDestroyed()) return;
 
         try {
-          // 1. Inspect window.localStorage
-          const stored = await authWin.webContents.executeJavaScript(`
-            (() => {
-              try {
-                for (let i = 0; i < localStorage.length; i++) {
-                  const k = localStorage.key(i);
-                  if (k && (k.includes('auth-token') || k.includes('supabase.auth') || k.startsWith('sb-'))) {
-                    const raw = localStorage.getItem(k);
-                    if (raw && raw.includes('access_token')) {
-                      const parsed = JSON.parse(raw);
-                      if (parsed && parsed.access_token) {
-                        return {
-                          accessToken: parsed.access_token,
-                          refreshToken: parsed.refresh_token,
-                          user: parsed.user || null
-                        };
-                      }
-                    }
-                  }
-                }
-              } catch(e) {}
-              return null;
-            })()
-          `);
-
-          if (stored && stored.accessToken) {
-            await handleTokenExtracted(stored.accessToken, stored.user);
-            return;
-          }
-
-          // 2. Inspect session cookies
-          const cookies = await authWin.webContents.session.cookies.get({ domain: 'victuscloud.com' });
-          for (const c of cookies) {
-            if (c.name.includes('auth-token')) {
-              try {
-                const decoded = decodeURIComponent(c.value);
-                if (decoded.includes('access_token')) {
-                  const parsed = JSON.parse(decoded);
-                  if (parsed && parsed.access_token) {
-                    await handleTokenExtracted(parsed.access_token, parsed.user);
-                    return;
-                  }
-                }
-              } catch {}
+          // Check minecraft_linked_accounts for this session UUID
+          const checkRes = await this.httpsRequest(
+            `${this.supabaseUrl}/rest/v1/minecraft_linked_accounts?minecraft_uuid=eq.${sessionUuid}&select=*`,
+            'GET',
+            {
+              apikey: this.supabaseServiceKey,
+              Authorization: `Bearer ${this.supabaseServiceKey}`,
+              Accept: 'application/json',
             }
-          }
+          );
 
-          // 3. Inspect current URL (hash or query token)
-          const curUrl = authWin.webContents.getURL();
-          if (curUrl) {
-            try {
-              const u = new URL(curUrl);
-              const hashParams = new URLSearchParams(u.hash.substring(1));
-              const queryParams = u.searchParams;
-              const tokenFromUrl = hashParams.get('access_token') || queryParams.get('access_token');
-              if (tokenFromUrl) {
-                await handleTokenExtracted(tokenFromUrl);
-                return;
-              }
-            } catch {}
+          if (checkRes.status === 200 && Array.isArray(checkRes.data) && checkRes.data.length > 0) {
+            const row = checkRes.data[0];
+            const userId = row.user_id;
+
+            if (userId) {
+              const profile = await this.getUserProfile(userId);
+              finish({
+                success: true,
+                profile: profile || {
+                  id: userId,
+                  email: '',
+                  username: row.minecraft_username || 'VictusUser',
+                  total_cp: 0,
+                  cp_level: 1,
+                  cp_tier: 'Starter',
+                },
+              });
+              return;
+            }
           }
         } catch {}
-      };
-
-      authWin.webContents.on('did-finish-load', () => {
-        checkForAuth();
-      });
-
-      authWin.webContents.on('did-navigate', () => {
-        checkForAuth();
-      });
-
-      authWin.webContents.on('did-navigate-in-page', () => {
-        checkForAuth();
-      });
-
-      // Regular check interval
-      this.authPollTimer = setInterval(() => {
-        checkForAuth();
-      }, 800);
+      }, 1500);
     });
   }
 
-  public cancelWebAuth(): void {
-    if (this.authPollTimer) {
-      clearInterval(this.authPollTimer);
-      this.authPollTimer = null;
+  public cancelBrowserAuth(): void {
+    if (this.authPollInterval) {
+      clearInterval(this.authPollInterval);
+      this.authPollInterval = null;
     }
-    if (this.activeAuthWindow && !this.activeAuthWindow.isDestroyed()) {
-      try {
-        this.activeAuthWindow.destroy();
-      } catch {}
-      this.activeAuthWindow = null;
+    if (this.currentLinkCode) {
+      const codeToDelete = this.currentLinkCode;
+      this.currentLinkCode = null;
+      this.currentLinkUuid = null;
+      this.httpsRequest(
+        `${this.supabaseUrl}/rest/v1/minecraft_link_tokens?code=eq.${codeToDelete}`,
+        'DELETE',
+        {
+          apikey: this.supabaseServiceKey,
+          Authorization: `Bearer ${this.supabaseServiceKey}`,
+        }
+      ).catch(() => {});
     }
   }
 
+  public getActiveLinkInfo(): { code: string | null; url: string | null } {
+    return {
+      code: this.currentLinkCode,
+      url: this.currentLinkCode ? `https://victuscloud.com/mc-link?code=${this.currentLinkCode}` : null,
+    };
+  }
+
+  // Alias for backward compatibility
+  public startWebAuth(
+    accountUsername?: string,
+    onCodeReady?: (info: { code: string; url: string }) => void
+  ) {
+    return this.startBrowserAuth(accountUsername, onCodeReady);
+  }
+
+  public cancelWebAuth() {
+    this.cancelBrowserAuth();
+  }
+
   public async clearSession(): Promise<void> {
+    this.cancelBrowserAuth();
     try {
       if (session?.defaultSession) {
         await session.defaultSession.clearStorageData({
@@ -647,7 +635,7 @@ export class VictusCloudManager {
 
   private httpsRequest(
     targetUrl: string,
-    method: 'GET' | 'POST' = 'GET',
+    method: 'GET' | 'POST' | 'DELETE' | 'PATCH' | 'PUT' = 'GET',
     headers: Record<string, string> = {},
     bodyData?: any
   ): Promise<{ status: number; data: any }> {

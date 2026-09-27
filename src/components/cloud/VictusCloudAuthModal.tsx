@@ -9,7 +9,10 @@ import {
   Sparkles,
   ExternalLink,
   Shield,
-  Coins,
+  KeyRound,
+  Check,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import { useVictusCloud } from '../../context/VictusCloudContext';
 
@@ -18,6 +21,9 @@ export const VictusCloudAuthModal: React.FC = () => {
     isAuthModalOpen,
     setIsAuthModalOpen,
     authPromptMessage,
+    activeLinkCode,
+    activeLinkUrl,
+    cancelBrowserAuth,
     loginWithBrowser,
     loginWithCredentials,
   } = useVictusCloud();
@@ -27,14 +33,15 @@ export const VictusCloudAuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
-  const handleBrowserLogin = async (mode: 'login' | 'signup' = 'login') => {
+  const handleBrowserLogin = async () => {
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      const ok = await loginWithBrowser(mode);
+      const ok = await loginWithBrowser();
       if (!ok) {
         setIsSubmitting(false);
       }
@@ -42,6 +49,32 @@ export const VictusCloudAuthModal: React.FC = () => {
       setErrorMessage(e.message || 'Login failed.');
       setIsSubmitting(false);
     }
+  };
+
+  const handleCancelBrowser = () => {
+    cancelBrowserAuth();
+    setIsSubmitting(false);
+    setErrorMessage('');
+  };
+
+  const handleReopenBrowser = () => {
+    const url =
+      activeLinkUrl ||
+      (activeLinkCode
+        ? `https://victuscloud.com/mc-link?code=${activeLinkCode}`
+        : 'https://victuscloud.com/login');
+    if (window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleCopyCode = () => {
+    if (!activeLinkCode) return;
+    navigator.clipboard.writeText(activeLinkCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
@@ -64,9 +97,15 @@ export const VictusCloudAuthModal: React.FC = () => {
     }
   };
 
-  const handleOpenSignup = () => {
-    handleBrowserLogin('signup');
+  const handleClose = () => {
+    if (activeLinkCode || isSubmitting) {
+      cancelBrowserAuth();
+      setIsSubmitting(false);
+    }
+    setIsAuthModalOpen(false);
   };
+
+  const isBrowserWaiting = Boolean(activeLinkCode || (isSubmitting && activeTab === 'browser'));
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-view-fade-in select-none">
@@ -77,11 +116,9 @@ export const VictusCloudAuthModal: React.FC = () => {
 
         {/* Close Button */}
         <button
-          onClick={() => {
-            if (!isSubmitting) setIsAuthModalOpen(false);
-          }}
-          disabled={isSubmitting}
+          onClick={handleClose}
           className="absolute top-5 right-5 p-1.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors cursor-pointer"
+          title="Close"
         >
           <X className="w-4 h-4" />
         </button>
@@ -122,66 +159,147 @@ export const VictusCloudAuthModal: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Switcher: Web & OAuth vs Direct Email/Password */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 mb-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab('browser')}
-            className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-              activeTab === 'browser'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>Web & OAuth</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('password')}
-            className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-              activeTab === 'password'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'text-white/60 hover:text-white'
-            }`}
-          >
-            <Mail className="w-3.5 h-3.5" />
-            <span>Direct Sign In</span>
-          </button>
-        </div>
-
-        {/* Tab 1: Web / OAuth Modal Flow */}
-        {activeTab === 'browser' ? (
-          <div className="space-y-4">
-            <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/70 space-y-2">
-              <div className="flex items-center space-x-2 text-purple-300 font-bold">
-                <Sparkles className="w-4 h-4" />
-                <span>Victus Cloud Sign-In Window</span>
-              </div>
-              <p className="leading-relaxed text-[11px] text-white/60">
-                Opens the official Victus Cloud sign-in window. Supports Google, Discord, and Email logins. Once signed in, your account and free servers will link automatically.
-              </p>
-            </div>
-
+        {/* Tab Switcher: Browser & Passkey vs Direct Email/Password */}
+        {!isBrowserWaiting && (
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-white/5 border border-white/10 mb-4">
             <button
-              onClick={() => handleBrowserLogin('login')}
-              disabled={isSubmitting}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center space-x-2 shadow-[0_0_25px_rgba(168,85,247,0.4)] disabled:opacity-50 active:scale-98"
+              type="button"
+              onClick={() => setActiveTab('browser')}
+              className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                activeTab === 'browser'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-white/60 hover:text-white'
+              }`}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Waiting for sign in...</span>
-                </>
-              ) : (
-                <>
-                  <Globe className="w-4 h-4" />
-                  <span>Login with Victus Cloud</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              <Globe className="w-3.5 h-3.5" />
+              <span>Browser & Passkey</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('password')}
+              className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                activeTab === 'password'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Direct Sign In</span>
             </button>
           </div>
+        )}
+
+        {/* Tab 1: Browser & Passkey Modal Flow */}
+        {activeTab === 'browser' ? (
+          isBrowserWaiting ? (
+            /* Active Waiting State in Browser */
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/25 space-y-3">
+                <div className="flex items-center space-x-2 text-purple-300 font-bold text-xs">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  <span>Waiting for browser authorization...</span>
+                </div>
+
+                <p className="text-[11px] text-white/70 leading-relaxed">
+                  We opened your default browser (Chrome, Edge, etc.) so you can sign in with your native{' '}
+                  <span className="text-purple-300 font-bold">Passkey / Windows Hello</span>, Google Account, or saved session.
+                </p>
+
+                {activeLinkCode && (
+                  <div className="mt-2 p-3 rounded-xl bg-black/50 border border-white/10 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-white/40 block uppercase tracking-wider font-mono">
+                        Verification Code
+                      </span>
+                      <span className="font-mono font-black text-lg tracking-widest text-cyan-300">
+                        {activeLinkCode}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCopyCode}
+                      className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold transition-all cursor-pointer"
+                      title="Copy code"
+                    >
+                      {copiedCode ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-300">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                <div className="text-[11px] text-white/50 space-y-1 pt-1">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span>Step 1: Sign in on victuscloud.com in your browser.</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                    <span>Step 2: Click <strong>"Link These Accounts"</strong> on the web page.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleReopenBrowser}
+                  className="flex-1 py-3 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Reopen Browser Tab</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelBrowser}
+                  className="py-3 px-4 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold text-xs transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Idle Browser Flow */
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-xs text-white/70 space-y-2.5">
+                <div className="flex items-center space-x-2 text-purple-300 font-bold">
+                  <KeyRound className="w-4 h-4 text-purple-400" />
+                  <span>External Browser Authentication</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-white/60">
+                  Opens victuscloud.com directly in your default browser. Supports hardware Passkeys (Windows Hello, Touch ID), Google Accounts, and saved sessions.
+                </p>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-purple-200/80 flex items-center space-x-1.5">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>Passkeys & Biometrics</span>
+                  </div>
+                  <div className="px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-purple-200/80 flex items-center space-x-1.5">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    <span>Instant Link-Back</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleBrowserLogin}
+                disabled={isSubmitting}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center space-x-2 shadow-[0_0_25px_rgba(168,85,247,0.4)] disabled:opacity-50 active:scale-98"
+              >
+                <Globe className="w-4 h-4" />
+                <span>Login with Victus Cloud</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )
         ) : (
           /* Tab 2: Direct Password Form */
           <form onSubmit={handlePasswordLogin} className="space-y-3">
@@ -243,7 +361,7 @@ export const VictusCloudAuthModal: React.FC = () => {
         <div className="mt-5 pt-4 border-t border-white/[0.08] flex items-center justify-between text-[11px]">
           <span className="text-white/50">Need a Victus Cloud account?</span>
           <button
-            onClick={handleOpenSignup}
+            onClick={handleBrowserLogin}
             className="text-purple-400 hover:text-purple-300 font-bold flex items-center space-x-1 cursor-pointer transition-colors"
           >
             <span>Create Free Account & Server</span>
@@ -254,3 +372,4 @@ export const VictusCloudAuthModal: React.FC = () => {
     </div>
   );
 };
+

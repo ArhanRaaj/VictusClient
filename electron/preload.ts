@@ -80,8 +80,10 @@ export interface IElectronAPI {
   onUpdateProgress: (callback: (progress: any) => void) => () => void;
 
   // Victus Cloud
-  victusCloudStartWebAuth: (mode?: 'login' | 'signup') => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
+  victusCloudStartWebAuth: (username?: string) => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
   victusCloudCancelWebAuth: () => Promise<boolean>;
+  victusCloudGetLinkInfo: () => Promise<{ code: string | null; url: string | null }>;
+  onVictusCloudLinkCode: (callback: (info: { code: string; url: string }) => void) => () => void;
   victusCloudLogout: () => Promise<boolean>;
   victusCloudLoginCredentials: (email: string, password: string) => Promise<{ success: boolean; profile?: any; accessToken?: string; error?: string }>;
   victusCloudGetProfile: (idOrEmail: string) => Promise<any>;
@@ -169,8 +171,14 @@ const api: IElectronAPI = {
   },
 
   // Victus Cloud
-  victusCloudStartWebAuth: (mode?: 'login' | 'signup') => ipcRenderer.invoke('victus-cloud-start-web-auth', mode),
+  victusCloudStartWebAuth: (username?: string) => ipcRenderer.invoke('victus-cloud-start-web-auth', username),
   victusCloudCancelWebAuth: () => ipcRenderer.invoke('victus-cloud-cancel-web-auth'),
+  victusCloudGetLinkInfo: () => ipcRenderer.invoke('victus-cloud-get-link-info'),
+  onVictusCloudLinkCode: (callback: (info: { code: string; url: string }) => void) => {
+    const sub = (_: any, data: any) => callback(data);
+    ipcRenderer.on('victus-cloud-link-code', sub);
+    return () => ipcRenderer.removeListener('victus-cloud-link-code', sub);
+  },
   victusCloudLogout: () => ipcRenderer.invoke('victus-cloud-logout'),
   victusCloudLoginCredentials: (email, password) => ipcRenderer.invoke('victus-cloud-login-credentials', email, password),
   victusCloudGetProfile: (idOrEmail) => ipcRenderer.invoke('victus-cloud-get-profile', idOrEmail),
