@@ -72,6 +72,25 @@
       "icon": "public/icon.png",
       "artifactName": "VictusClient-Setup-${arch}.${ext}"
     },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        },
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/icon.png",
+      "category": "Game",
+      "artifactName": "VictusClient-Linux-${arch}.${ext}"
+    },
     "nsis": {
       "oneClick": true,
       "allowToChangeInstallationDirectory": false,

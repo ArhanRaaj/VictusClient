@@ -6,7 +6,11 @@ const AdmZip = require('adm-zip');
 const rootDir = path.join(__dirname, '..');
 const releaseDir = path.join(rootDir, 'release');
 const cacheDir = path.join(rootDir, '.cache', 'electron-mac');
-const asarPath = path.join(rootDir, 'dist', 'win-unpacked', 'resources', 'app.asar');
+const asarCandidates = [
+  path.join(releaseDir, 'win-unpacked', 'resources', 'app.asar'),
+  path.join(rootDir, 'dist', 'win-unpacked', 'resources', 'app.asar')
+];
+const asarPath = asarCandidates.find(p => fs.existsSync(p)) || asarCandidates[0];
 
 const ELECTRON_VERSION = 'v33.4.11';
 const APP_VERSION = '1.1.0-beta.1';

@@ -235,6 +235,10 @@ export const LauncherProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLogs((prev) => [...prev.slice(-999), newEntry]);
   }, []);
 
+  useEffect(() => {
+    (window as any).__addVictusLog = addLog;
+  }, [addLog]);
+
   const clearLogs = useCallback(() => {
     setLogs([]);
   }, []);

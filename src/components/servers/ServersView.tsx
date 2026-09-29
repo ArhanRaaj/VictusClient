@@ -70,6 +70,16 @@ export const ServersView: React.FC<ServersViewProps> = () => {
   const [busyServerId, setBusyServerId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Real-time automatic polling: Refresh live player count & server status every 8 seconds
+  React.useEffect(() => {
+    if (!isLoggedIn) return;
+    refreshServers();
+    const interval = setInterval(() => {
+      refreshServers();
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn, refreshServers]);
+
   // Copy IP handler
   const handleCopyIp = (server: CloudServer) => {
     const address = server.fullAddress || `${server.subdomain}:${server.port}`;

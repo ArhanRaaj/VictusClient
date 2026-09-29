@@ -81,25 +81,33 @@ export class MinecraftLauncher {
     try {
       const idx = JSON.parse(fs.readFileSync(indexFile, 'utf-8'));
       const objects = idx.objects || {};
-      
-      // Download essential UI/font/text assets first so the window never crashes
-      const essentialEntries = Object.entries(objects).filter(
-        ([k]) => !k.startsWith('minecraft/sounds/') && !k.startsWith('minecraft/records/')
+      const allEntries = Object.entries(objects);
+
+      // 1. Primary assets: UI, fonts, textures, language, AND all in-game sound effects (footsteps, blocks, mobs, rain, attacks)
+      const primaryEntries = allEntries.filter(
+        ([k]) => !k.startsWith('minecraft/records/') && !k.startsWith('minecraft/sounds/music/')
+      );
+
+      // 2. Secondary assets: background music discs and ambient music
+      const secondaryEntries = allEntries.filter(
+        ([k]) => k.startsWith('minecraft/records/') || k.startsWith('minecraft/sounds/music/')
       );
 
       callbacks.onProgress({
         instanceId: id,
         status: 'downloading',
         percent: 65,
-        message: `Verifying ${essentialEntries.length} core game assets...`,
+        message: `Verifying ${primaryEntries.length} game assets & in-game audio...`,
       });
 
-      // Concurrent downloader with pool of 12 workers
-      const concurrency = 12;
+      // Concurrent downloader with pool of 20 workers for maximum throughput
+      const concurrency = 20;
       let currentIndex = 0;
-      const worker = async () => {
-        while (currentIndex < essentialEntries.length) {
-          const [k, obj] = essentialEntries[currentIndex++] as [string, any];
+      const worker = async (entryList: [string, any][]) => {
+        while (currentIndex < entryList.length) {
+          const item = entryList[currentIndex++];
+          if (!item) break;
+          const [k, obj] = item;
           const hash = obj.hash;
           const sub = hash.slice(0, 2);
           const dest = path.join(this.assetsDir, 'objects', sub, hash);
@@ -112,8 +120,32 @@ export class MinecraftLauncher {
         }
       };
 
-      const workers = Array.from({ length: concurrency }, () => worker());
-      await Promise.all(workers);
+      // Download all core game assets and in-game sound effects prior to launch
+      currentIndex = 0;
+      await Promise.all(Array.from({ length: concurrency }, () => worker(primaryEntries)));
+
+      // Asynchronously ensure remaining background music & records are downloaded without stalling game start
+      (async () => {
+        let secIndex = 0;
+        const secWorker = async () => {
+          while (secIndex < secondaryEntries.length) {
+            const item = secondaryEntries[secIndex++];
+            if (!item) break;
+            const [k, obj] = item as [string, any];
+            const hash = obj?.hash;
+            if (!hash) continue;
+            const sub = hash.slice(0, 2);
+            const dest = path.join(this.assetsDir, 'objects', sub, hash);
+            if (fs.existsSync(dest) && fs.statSync(dest).size > 0) continue;
+
+            try {
+              const url = `https://resources.download.minecraft.net/${sub}/${hash}`;
+              await this.downloadFile(url, dest);
+            } catch {}
+          }
+        };
+        await Promise.all(Array.from({ length: 8 }, () => secWorker()));
+      })().catch(() => {});
     } catch (e: any) {
       callbacks.onLog({
         id: `log-${Date.now()}`,
@@ -304,6 +336,21 @@ export class MinecraftLauncher {
       const ramMax = instance.ramMax || 4096;
       const ramMin = instance.ramMin || 1024;
 
+      // Default high-performance FPS tuning arguments (G1GC low-pause GC & heap compaction)
+      const performanceJvmFlags = [
+        '-XX:+UseG1GC',
+        '-XX:G1NewSizePercent=20',
+        '-XX:G1ReservePercent=20',
+        '-XX:MaxGCPauseMillis=50',
+        '-XX:G1HeapRegionSize=32M',
+        '-XX:+UnlockExperimentalVMOptions',
+        '-XX:+DisableExplicitGC',
+        '-XX:+AlwaysPreTouch',
+        '-XX:+ParallelRefProcEnabled',
+        '-XX:+PerfDisableSharedMem',
+        '-Dsun.rmi.dgc.server.gcInterval=2147483646',
+      ];
+
       const jvmArgs = [
         `-Xms${ramMin}M`,
         `-Xmx${ramMax}M`,
@@ -312,12 +359,14 @@ export class MinecraftLauncher {
         `-Djna.tmpdir=${nativesDir}`,
         `-Dio.netty.native.workdir=${nativesDir}`,
         `-Dminecraft.launcher.brand=VictusClient`,
-        `-Dminecraft.launcher.version=1.0.0`,
+        `-Dminecraft.launcher.version=1.1.0`,
         '--enable-native-access=ALL-UNNAMED',
       ];
 
-      if (instance.jvmArgs) {
+      if (instance.jvmArgs && instance.jvmArgs.trim().length > 0) {
         jvmArgs.push(...instance.jvmArgs.split(' ').filter(Boolean));
+      } else {
+        jvmArgs.push(...performanceJvmFlags);
       }
 
       jvmArgs.push('-cp', classpath);
@@ -371,6 +420,13 @@ export class MinecraftLauncher {
         cwd: instance.gameDir,
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          // Force high-performance dedicated GPU on dual-GPU laptops (NVIDIA / AMD)
+          SHIM_MCCOMPAT: '0',
+          __NV_PRIME_RENDER_OFFLOAD: '1',
+          __GLX_VENDOR_LIBRARY_NAME: 'nvidia',
+        },
       });
 
       proc.unref();

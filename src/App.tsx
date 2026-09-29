@@ -30,8 +30,26 @@ export const App: React.FC = () => {
   const [editingInstance, setEditingInstance] = useState<Instance | null>(null);
   const { theme } = useTheme();
 
-  // Global Ctrl+K hotkey
+  // Global Ctrl+K hotkey & Showcase automation hook
   useEffect(() => {
+    (window as any).__setVictusTab = (tab: string) => {
+      setLoading(false);
+      setIsCreateOpen(false);
+      setEditingInstance(null);
+      setIsSearchOpen(false);
+      setActiveTab(tab);
+    };
+
+    (window as any).__openCreateModal = () => {
+      setLoading(false);
+      setIsCreateOpen(true);
+    };
+
+    (window as any).__openSearch = () => {
+      setLoading(false);
+      setIsSearchOpen(true);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();

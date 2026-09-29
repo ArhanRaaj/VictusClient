@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import AdmZip from 'adm-zip';
 
 export class ModrinthManager {
   public async search(options: {
@@ -155,8 +156,17 @@ export class ModrinthManager {
     category: string;
     fileUrl: string;
     fileName: string;
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; installedCount?: number }> {
     try {
+      // If this is a Modpack (.mrpack archive), unpack, parse index, download individual mods and extract overrides
+      if (
+        options.category === 'modpacks' ||
+        options.fileName.toLowerCase().endsWith('.mrpack') ||
+        options.fileUrl.toLowerCase().includes('.mrpack')
+      ) {
+        return this.installMrpack(options.instanceDir, options.fileUrl);
+      }
+
       let subDir = 'mods';
       if (options.category === 'shaders') subDir = 'shaderpacks';
       else if (options.category === 'resourcepacks') subDir = 'resourcepacks';
@@ -177,6 +187,105 @@ export class ModrinthManager {
     }
   }
 
+  public async installMrpack(
+    instanceDir: string,
+    fileUrl: string
+  ): Promise<{ success: boolean; error?: string; installedCount?: number }> {
+    try {
+      // 1. Download .mrpack archive
+      const res = await fetch(fileUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status} downloading modpack archive`);
+      const buf = Buffer.from(await res.arrayBuffer());
+
+      // 2. Open ZIP with AdmZip
+      const zip = new AdmZip(buf);
+      const indexEntry = zip.getEntry('modrinth.index.json');
+      if (!indexEntry) {
+        throw new Error('Invalid Modpack: modrinth.index.json not found in archive');
+      }
+
+      const indexData = JSON.parse(indexEntry.getData().toString('utf8'));
+      const files: any[] = indexData.files || [];
+
+      // 3. Filter files for client (skip server-only mods)
+      const clientFiles = files.filter((f) => {
+        if (f.env && f.env.client === 'unsupported') return false;
+        return true;
+      });
+
+      // 4. Download all included mods & files concurrently
+      let downloadedCount = 0;
+      let currentIndex = 0;
+      const concurrency = 8;
+
+      const worker = async () => {
+        while (currentIndex < clientFiles.length) {
+          const fileInfo = clientFiles[currentIndex++];
+          if (!fileInfo) break;
+          const dlUrl = fileInfo.downloads?.[0];
+          if (!dlUrl) continue;
+
+          // fileInfo.path is relative to instance root, e.g. "mods/sodium-fabric-0.6.5.jar" or "config/foo.json"
+          const dest = path.join(instanceDir, fileInfo.path);
+          const dir = path.dirname(dest);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+          try {
+            const dlRes = await fetch(dlUrl);
+            if (dlRes.ok) {
+              const fileData = Buffer.from(await dlRes.arrayBuffer());
+              fs.writeFileSync(dest, fileData);
+              downloadedCount++;
+            }
+          } catch (e) {
+            console.warn(`[ModrinthManager] Warning downloading modpack file ${fileInfo.path}:`, e);
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+      // 5. Extract all overrides (configs, options, shaderpacks, etc.)
+      const entries = zip.getEntries();
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        let targetRel: string | null = null;
+        if (entry.entryName.startsWith('overrides/')) {
+          targetRel = entry.entryName.substring('overrides/'.length);
+        } else if (entry.entryName.startsWith('client-overrides/')) {
+          targetRel = entry.entryName.substring('client-overrides/'.length);
+        }
+
+        if (targetRel) {
+          const dest = path.join(instanceDir, targetRel);
+          const dir = path.dirname(dest);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(dest, entry.getData());
+        }
+      }
+
+      // 6. Clean up any loose .mrpack files in instanceDir and mods/ folder
+      const cleanupFolders = [instanceDir, path.join(instanceDir, 'mods')];
+      for (const f of cleanupFolders) {
+        if (fs.existsSync(f)) {
+          try {
+            const fList = fs.readdirSync(f);
+            for (const item of fList) {
+              if (item.toLowerCase().endsWith('.mrpack')) {
+                fs.unlinkSync(path.join(f, item));
+              }
+            }
+          } catch {}
+        }
+      }
+
+      return { success: true, installedCount: downloadedCount };
+    } catch (err: any) {
+      console.error('[ModrinthManager] Error installing modpack:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
   public getInstalledFiles(instanceDir: string, category: string): any[] {
     let subDir = 'mods';
     if (category === 'shaders') subDir = 'shaderpacks';
@@ -188,19 +297,21 @@ export class ModrinthManager {
 
     try {
       const files = fs.readdirSync(targetFolder);
-      return files.map((fileName) => {
-        const fullPath = path.join(targetFolder, fileName);
-        const stat = fs.statSync(fullPath);
-        const isEnabled = !fileName.endsWith('.disabled');
-        const cleanName = fileName.replace(/\.disabled$/, '').replace(/\.jar$/, '').replace(/\.zip$/, '');
+      return files
+        .filter((fileName) => !fileName.toLowerCase().endsWith('.mrpack'))
+        .map((fileName) => {
+          const fullPath = path.join(targetFolder, fileName);
+          const stat = fs.statSync(fullPath);
+          const isEnabled = !fileName.endsWith('.disabled');
+          const cleanName = fileName.replace(/\.disabled$/, '').replace(/\.jar$/, '').replace(/\.zip$/, '');
 
-        return {
-          fileName,
-          name: cleanName,
-          enabled: isEnabled,
-          size: stat.size,
-        };
-      });
+          return {
+            fileName,
+            name: cleanName,
+            enabled: isEnabled,
+            size: stat.size,
+          };
+        });
     } catch {
       return [];
     }

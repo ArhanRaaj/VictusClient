@@ -481,6 +481,14 @@ export const ContentsView: React.FC = () => {
           throw new Error(`No downloadable file available for ${item.title} (${targetVersion.version_number}).`);
         }
 
+        if (activeCategory === 'modpacks') {
+          addNotification(
+            'info',
+            'Unpacking Modpack',
+            `Downloading ${item.title} and extracting all included mods into "${activeInstance.name}"...`
+          );
+        }
+
         const res = await window.electronAPI.installContentFile({
           instanceId: activeInstance.id,
           category: activeCategory,
@@ -491,10 +499,15 @@ export const ContentsView: React.FC = () => {
         });
 
         if (!res.success) {
-          throw new Error(res.error || 'Failed to save downloaded file.');
+          throw new Error(res.error || 'Failed to install modpack files.');
         }
 
-        addNotification('success', 'Installed Successfully', `${item.title} (${targetVersion.version_number}) installed to "${activeInstance.name}"!`);
+        const successMsg =
+          activeCategory === 'modpacks'
+            ? `Modpack "${item.title}" fully extracted! All included mods have been installed into "${activeInstance.name}".`
+            : `${item.title} (${targetVersion.version_number}) installed to "${activeInstance.name}"!`;
+
+        addNotification('success', 'Installed Successfully', successMsg);
         loadInstalled();
       } else {
         // Web simulation

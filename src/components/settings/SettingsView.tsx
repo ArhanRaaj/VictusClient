@@ -538,15 +538,68 @@ export const SettingsView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-white/80 mb-1">
-                    Default JVM Arguments
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-white/80">
+                      JVM Arguments & Performance Flags
+                    </label>
+                    <span className="text-[10px] text-purple-400 font-mono font-bold uppercase">
+                      FPS Tuned
+                    </span>
+                  </div>
                   <input
                     type="text"
                     value={customJvm}
                     onChange={(e) => setCustomJvm(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-white/90"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-white/90 mb-2.5"
                   />
+
+                  {/* 1-Click Performance Presets */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomJvm(
+                          '-XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:+ParallelRefProcEnabled -XX:+PerfDisableSharedMem'
+                        );
+                        addNotification(
+                          'success',
+                          'FPS Boost Applied',
+                          'Ultra FPS optimization JVM flags loaded! Stuttering reduced and frame rates maximized.'
+                        );
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-[11px] font-bold text-purple-300 transition-all cursor-pointer"
+                    >
+                      ⚡ Ultra FPS Boost Preset
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomJvm(
+                          '-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+ParallelRefProcEnabled -XX:+AlwaysPreTouch'
+                        );
+                        addNotification(
+                          'info',
+                          'Low-End PC Profile',
+                          'Optimized memory compaction applied for lower RAM systems.'
+                        );
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-white/70 transition-all cursor-pointer"
+                    >
+                      🌱 RAM Saver (Low-End PC)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomJvm('-XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=2147483646');
+                        addNotification('info', 'Default Flags', 'Default balanced JVM arguments restored.');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-white/50 transition-all cursor-pointer"
+                    >
+                      Standard Balanced
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

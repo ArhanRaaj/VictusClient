@@ -1,6 +1,7 @@
 import http from 'http';
 import https from 'https';
 import crypto from 'crypto';
+import net from 'net';
 import { shell, BrowserWindow, session } from 'electron';
 
 export interface VictusCloudProfile {
@@ -391,8 +392,16 @@ export class VictusCloudManager {
 
         const serverUuid = attr.uuid;
         const nodeId = attr.node;
-        const ip = primaryAlloc?.alias || primaryAlloc?.ip || '0.0.0.0';
+        let ip = primaryAlloc?.alias || primaryAlloc?.ip || '0.0.0.0';
         const port = primaryAlloc?.port || 25565;
+
+        // If IP is 0.0.0.0 or private IP, resolve node FQDN for direct connectivity
+        if (ip === '0.0.0.0' || ip === '127.0.0.1' || ip.startsWith('10.') || ip.startsWith('172.16.') || ip.startsWith('192.168.')) {
+          const nodeCfg = await this.resolveNodeConfig(nodeId);
+          if (nodeCfg?.fqdn) {
+            ip = nodeCfg.fqdn;
+          }
+        }
         const fullAddress = `${ip}:${port}`;
 
         // Fetch live state from Wings
@@ -599,15 +608,130 @@ export class VictusCloudManager {
     return res.status === 200 ? res.data : null;
   }
 
+  private writeVarInt(value: number): Buffer {
+    const bytes: number[] = [];
+    while (true) {
+      if ((value & 0xffffff80) === 0) {
+        bytes.push(value);
+        return Buffer.from(bytes);
+      }
+      bytes.push((value & 0x7f) | 0x80);
+      value >>>= 7;
+    }
+  }
+
+  private readVarInt(buffer: Buffer, offset = 0): { value: number; bytesRead: number } {
+    let value = 0;
+    let bytesRead = 0;
+    let b = 0;
+    do {
+      if (offset + bytesRead >= buffer.length) break;
+      b = buffer[offset + bytesRead++];
+      value |= (b & 0x7f) << (bytesRead * 7 - 7);
+    } while ((b & 0x80) !== 0 && bytesRead < 5);
+    return { value, bytesRead };
+  }
+
+  private directTcpPing(
+    host: string,
+    port = 25565
+  ): Promise<{ online: boolean; players?: { online: number; max: number }; ping?: number } | null> {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      let finished = false;
+      const socket = net.connect(port, host);
+      socket.setTimeout(3500);
+
+      const finish = (result: any) => {
+        if (finished) return;
+        finished = true;
+        try {
+          socket.destroy();
+        } catch {}
+        resolve(result);
+      };
+
+      const hostBuf = Buffer.from(host, 'utf8');
+      const portBuf = Buffer.alloc(2);
+      portBuf.writeUInt16BE(port, 0);
+
+      const handshakeData = Buffer.concat([
+        this.writeVarInt(0),
+        this.writeVarInt(47),
+        this.writeVarInt(hostBuf.length),
+        hostBuf,
+        portBuf,
+        this.writeVarInt(1),
+      ]);
+      const handshakePacket = Buffer.concat([
+        this.writeVarInt(handshakeData.length),
+        handshakeData,
+      ]);
+
+      const requestPacket = Buffer.concat([this.writeVarInt(1), this.writeVarInt(0)]);
+
+      socket.on('connect', () => {
+        try {
+          socket.write(Buffer.concat([handshakePacket, requestPacket]));
+        } catch {
+          finish(null);
+        }
+      });
+
+      let received = Buffer.alloc(0);
+      socket.on('data', (chunk) => {
+        received = Buffer.concat([received, chunk]);
+        let offset = 0;
+        const packetLen = this.readVarInt(received, offset);
+        if (packetLen.bytesRead === 0) return;
+        offset += packetLen.bytesRead;
+
+        if (received.length >= packetLen.value + packetLen.bytesRead) {
+          const packetId = this.readVarInt(received, offset);
+          offset += packetId.bytesRead;
+          const strLen = this.readVarInt(received, offset);
+          offset += strLen.bytesRead;
+
+          const jsonStr = received.slice(offset, offset + strLen.value).toString('utf8');
+          try {
+            const parsed = JSON.parse(jsonStr);
+            finish({
+              online: true,
+              players: {
+                online: parsed.players?.online || 0,
+                max: parsed.players?.max || 20,
+              },
+              ping: Date.now() - start,
+            });
+          } catch {
+            finish(null);
+          }
+        }
+      });
+
+      socket.on('timeout', () => finish(null));
+      socket.on('error', () => finish(null));
+    });
+  }
+
   private async checkMinecraftPing(
     host: string,
     port: number
   ): Promise<{ online: boolean; players?: { online: number; max: number } } | null> {
+    // 1. Direct real-time TCP Minecraft Server List Ping (0 caching, instant player updates)
+    try {
+      const tcp = await this.directTcpPing(host, port);
+      if (tcp && tcp.online) {
+        return tcp;
+      }
+    } catch {}
+
+    // 2. Fallback to API if TCP is blocked
     try {
       const res = await this.httpsRequest(
         `https://api.mcsrvstat.us/3/${encodeURIComponent(host)}:${port}`,
         'GET',
-        { 'User-Agent': 'VictusClient/1.0.9 (support@victusclient.com)' }
+        { 'User-Agent': 'VictusClient/1.1.0 (support@victusclient.com)' }
       );
       if (res.status === 200 && res.data) {
         return {
