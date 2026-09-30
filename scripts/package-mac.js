@@ -9,8 +9,12 @@ const cacheDir = path.join(rootDir, '.cache', 'electron-mac');
 const asarCandidates = [
   path.join(releaseDir, 'win-unpacked', 'resources', 'app.asar'),
   path.join(rootDir, 'dist', 'win-unpacked', 'resources', 'app.asar')
-];
-const asarPath = asarCandidates.find(p => fs.existsSync(p)) || asarCandidates[0];
+];  const asarPath = asarCandidates.find(p => fs.existsSync(p)) || asarCandidates[0];
+
+// 0x81ED0000. Plain multiplication (never `|` / `<<`) because JS bitwise operators return a
+// *signed* 32-bit int and AdmZip writes a negative external-attribute value as 0.
+const EXECUTABLE_MODE = 0o100755 * 65536;
+
 
 const ELECTRON_VERSION = 'v33.4.11';
 const APP_VERSION = '1.1.0-beta.1';
@@ -20,28 +24,66 @@ const BUNDLE_ID = 'net.victusclient.launcher';
 if (!fs.existsSync(releaseDir)) fs.mkdirSync(releaseDir, { recursive: true });
 if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
+function isValidZip(filePath) {
+  try {
+    const st = fs.statSync(filePath);
+    if (st.size < 1024) return false;
+    const len = Math.min(64 * 1024, st.size);
+    const buf = Buffer.alloc(len);
+    const fd = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buf, 0, len, st.size - len);
+    fs.closeSync(fd);
+    return buf.includes(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  } catch {
+    return false;
+  }
+}
+
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
-    if (fs.existsSync(dest) && fs.statSync(dest).size > 10000000) {
+    if (isValidZip(dest)) {
       console.log(`Using cached download: ${path.basename(dest)}`);
       return resolve(dest);
     }
 
     console.log(`Downloading ${url}...`);
-    const file = fs.createWriteStream(dest);
+    const tmpDest = `${dest}.download`;
+    const file = fs.createWriteStream(tmpDest);
+    let expected = 0;
+    let downloaded = 0;
+    let lastLoggedPct = 0;
+
+    const finish = () => {
+      // Wait for the write stream to actually flush before validating/renaming,
+      // otherwise a truncated archive can be produced.
+      file.end(() => {
+        if (expected > 0 && downloaded !== expected) {
+          try { fs.unlinkSync(tmpDest); } catch {}
+          return reject(new Error(`Incomplete download: ${downloaded} of ${expected} bytes`));
+        }
+        if (!isValidZip(tmpDest)) {
+          try { fs.unlinkSync(tmpDest); } catch {}
+          return reject(new Error('Downloaded archive is not a valid zip'));
+        }
+        fs.renameSync(tmpDest, dest);
+        console.log(`✓ Downloaded ${path.basename(dest)} successfully (${(downloaded / 1024 / 1024).toFixed(1)} MB).`);
+        resolve(dest);
+      });
+    };
 
     const get = (targetUrl) => {
       https.get(targetUrl, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
           return get(res.headers.location);
         }
         if (res.statusCode !== 200) {
+          res.resume();
           return reject(new Error(`Download failed with HTTP ${res.statusCode}`));
         }
 
         const total = parseInt(res.headers['content-length'] || '0', 10);
-        let downloaded = 0;
-        let lastLoggedPct = 0;
+        expected = total;
 
         res.on('data', (chunk) => {
           downloaded += chunk.length;
@@ -55,11 +97,7 @@ function downloadFile(url, dest) {
           }
         });
 
-        res.on('end', () => {
-          file.end();
-          console.log(`✓ Downloaded ${path.basename(dest)} successfully.`);
-          resolve(dest);
-        });
+        res.on('end', finish);
 
         res.on('error', reject);
       }).on('error', reject);
@@ -141,6 +179,26 @@ async function packageMacArch(arch) {
 
   const distZip = new AdmZip();
   distZip.addLocalFolder(appNew, `${APP_NAME}.app`);
+
+  // Windows stat() cannot express the Unix executable bit, so zipping here would ship
+  // a .app whose binaries are not executable on macOS. Force the bits explicitly.
+  let markedExecutable = 0;
+  for (const entry of distZip.getEntries()) {
+    if (entry.isDirectory) continue;
+    const name = entry.entryName.replace(/\\/g, '/');
+    const basename = name.split('/').pop() || '';
+    const shouldBeExecutable =
+      /\/MacOS\//.test(name) ||
+      /\.(dylib|jnilib|so)$/.test(name) ||
+      // Framework binaries carry no extension (e.g. "Electron Framework").
+      (name.includes('/Contents/Frameworks/') && !basename.includes('.'));
+    if (shouldBeExecutable) {
+      entry.attr = EXECUTABLE_MODE;
+      markedExecutable++;
+    }
+  }
+  console.log(`   Marked ${markedExecutable} bundled binaries executable.`);
+
   distZip.writeZip(outZipPath);
 
   const finalMb = (fs.statSync(outZipPath).size / 1024 / 1024).toFixed(2);

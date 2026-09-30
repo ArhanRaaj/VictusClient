@@ -20,6 +20,12 @@ const TAG = 'v1.1.0-beta.1';
 const TITLE = 'VictusClient v1.1.0-beta.1 (Core Beta Release)';
 const BODY = `## What's Changed in VictusClient v1.1.0-beta.1 (Beta Release) 🚀
 
+### 🛠️ Critical Fix: Minecraft Launch Freeze
+- **Fixed the regression that froze the launcher on "Launch Minecraft"**: downloads no longer run through a blocking \`execSync\` curl accelerator on the Electron main thread. Every file is fetched with the async streaming downloader, so the window stays responsive and Minecraft actually starts.
+- **Cancellable preparation**: launch preparation now reports progress continuously and aborts immediately when you cancel, instead of hanging indefinitely.
+- **Correct process handling**: spawn failures now reset the launcher to a usable state, Windows builds tear down the whole Java process tree on stop, and the same instance can no longer be launched twice.
+- **Cross-platform launch correctness**: platform-aware rule evaluation, native library selection and classpath separators (Windows / macOS / Linux), version-appropriate JVM flags, and Java detection that never blocks the UI.
+
 ### 🎮 Independent Game Execution & Tray Integration
 - **Game Never Closes with Launcher**: Minecraft processes now run detached in their own process group with native \`javaw.exe\` preference. Closing the launcher window never terminates your running Minecraft instances.
 - **Background System Tray**: Added system tray management with active game indicators, double-click window restore, and automatic re-focusing when games exit.
@@ -174,13 +180,20 @@ async function main() {
   console.log('3. Uploading Cross-Platform Release Assets...');
   const releaseDir = path.join(__dirname, '..', 'release');
 
+  // `VictusClient-Setup.exe` stays the lightweight asar-patching installer that the
+  // in-app auto-updater downloads. The *-Windows-* entries are the genuine 64-bit and
+  // 32-bit full installers (verified with `npm run verify:release`).
   const assetsToUpload = [
+    'VictusClient-Setup-Windows-x64.exe',
+    'VictusClient-Setup-Windows-x86.exe',
     'VictusClient-Setup-x64.exe',
     'VictusClient-Setup-ia32.exe',
     'VictusClient-Setup.exe',
     'VictusClient-Setup-x86.exe',
     'VictusClient-macOS-arm64.zip',
     'VictusClient-macOS-x64.zip',
+    'VictusClient-Linux-x64.zip',
+    'latest.yml',
     'app-asar.zip',
   ];
 

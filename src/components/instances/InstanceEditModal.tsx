@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Sliders, Cpu, Save, Image, Upload, Check, Sparkles } from 'lucide-react';
+import { X, Sliders, Cpu, Save, Image, Upload, Check, Sparkles, Gauge } from 'lucide-react';
 import { Instance } from '../../types/launcher';
 import { useLauncher } from '../../context/LauncherContext';
 
@@ -20,6 +20,7 @@ export const InstanceEditModal: React.FC<InstanceEditModalProps> = ({
   const [name, setName] = useState('');
   const [ramMax, setRamMax] = useState(4096);
   const [jvmArgs, setJvmArgs] = useState('');
+  const [performancePreset, setPerformancePreset] = useState(false);
   const [icon, setIcon] = useState('⚡');
   const [background, setBackground] = useState('');
   const [customUrl, setCustomUrl] = useState('');
@@ -30,6 +31,7 @@ export const InstanceEditModal: React.FC<InstanceEditModalProps> = ({
       setName(instance.name || '');
       setRamMax(instance.ramMax || 4096);
       setJvmArgs(instance.jvmArgs || '');
+      setPerformancePreset(instance.performancePreset === true);
       setIcon(instance.icon || '⚡');
       setBackground(instance.background || DEFAULT_WALLPAPER);
       setCustomUrl('');
@@ -58,6 +60,7 @@ export const InstanceEditModal: React.FC<InstanceEditModalProps> = ({
       name: name.trim() || instance.name,
       ramMax,
       jvmArgs,
+      performancePreset,
       icon,
       background,
     });
@@ -222,6 +225,39 @@ export const InstanceEditModal: React.FC<InstanceEditModalProps> = ({
               onChange={(e) => setRamMax(Number(e.target.value))}
               className="w-full accent-purple-400 cursor-pointer"
             />
+          </div>
+
+          {/* Performance preset */}
+          <div className="rounded-2xl bg-black/30 border border-white/10 p-4">
+            <button
+              type="button"
+              onClick={() => setPerformancePreset((v) => !v)}
+              className="w-full flex items-start justify-between space-x-3 text-left cursor-pointer"
+            >
+              <span className="flex items-start space-x-3">
+                <Gauge className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="block text-xs font-bold uppercase tracking-wider text-white/80">
+                    Performance Preset
+                  </span>
+                  <span className="block text-[11px] text-white/55 mt-1 leading-relaxed">
+                    Lowers render distance, simulation distance, mipmaps, cloud range and particles in
+                    this instance&apos;s options.txt at launch. Use the in-game settings to change them back.
+                  </span>
+                </span>
+              </span>
+              <span
+                className={`shrink-0 mt-0.5 w-9 h-5 rounded-full transition-all relative ${
+                  performancePreset ? 'bg-emerald-500' : 'bg-white/20'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
+                    performancePreset ? 'left-[18px]' : 'left-0.5'
+                  }`}
+                />
+              </span>
+            </button>
           </div>
 
           {/* JVM Launch Arguments */}

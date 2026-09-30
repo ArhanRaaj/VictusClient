@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { MANIFEST_TTL_MS, writeCache } from './LaunchCache';
 
 export interface MojangVersionManifest {
   latest: { release: string; snapshot: string };
@@ -15,6 +16,8 @@ export interface MojangVersionManifest {
 export class VersionManager {
   private versionsDir: string;
   private manifestCacheFile: string;
+  /** Parsed manifest for this app session; several instances launch from the same process. */
+  private manifestMemo: { at: number; data: MojangVersionManifest } | null = null;
 
   constructor(dataDir: string) {
     this.versionsDir = path.join(dataDir, 'versions');
@@ -24,19 +27,56 @@ export class VersionManager {
     }
   }
 
-  public async getManifest(): Promise<MojangVersionManifest> {
+  /**
+   * Reads the cached manifest. Entries are stored wrapped with a timestamp; installations that
+   * predate the cache still hold the raw manifest, so both shapes are accepted.
+   */
+  private readCachedManifest(maxAgeMs?: number): MojangVersionManifest | null {
+    try {
+      if (!fs.existsSync(this.manifestCacheFile)) return null;
+      const parsed = JSON.parse(fs.readFileSync(this.manifestCacheFile, 'utf-8'));
+      if (parsed && Array.isArray(parsed.versions)) {
+        // Legacy raw manifest: fall back to the file timestamp to judge its age.
+        if (typeof maxAgeMs === 'number') {
+          const age = Date.now() - fs.statSync(this.manifestCacheFile).mtimeMs;
+          if (age > maxAgeMs) return null;
+        }
+        return parsed as MojangVersionManifest;
+      }
+      if (parsed && parsed.data && Array.isArray(parsed.data.versions)) {
+        if (typeof maxAgeMs === 'number' && Date.now() - Number(parsed.at) > maxAgeMs) return null;
+        return parsed.data as MojangVersionManifest;
+      }
+    } catch {}
+    return null;
+  }
+
+  public async getManifest(forceRefresh = false): Promise<MojangVersionManifest> {
+    // The manifest only changes when Mojang publishes a version, so a warm cache is served
+    // straight from memory (or disk) instead of paying for a network round trip every launch.
+    if (!forceRefresh) {
+      if (this.manifestMemo && Date.now() - this.manifestMemo.at <= MANIFEST_TTL_MS) {
+        return this.manifestMemo.data;
+      }
+      const fresh = this.readCachedManifest(MANIFEST_TTL_MS);
+      if (fresh) {
+        this.manifestMemo = { at: Date.now(), data: fresh };
+        return fresh;
+      }
+    }
+
     try {
       const res = await fetch('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
       if (res.ok) {
         const manifest: MojangVersionManifest = (await res.json()) as MojangVersionManifest;
-        fs.writeFileSync(this.manifestCacheFile, JSON.stringify(manifest), 'utf-8');
+        writeCache(this.manifestCacheFile, manifest);
+        this.manifestMemo = { at: Date.now(), data: manifest };
         return manifest;
       }
     } catch {}
 
-    if (fs.existsSync(this.manifestCacheFile)) {
-      return JSON.parse(fs.readFileSync(this.manifestCacheFile, 'utf-8'));
-    }
+    const stale = this.readCachedManifest();
+    if (stale) return stale;
 
     // Default static fallback
     return {
@@ -86,10 +126,19 @@ export class VersionManager {
       } catch {}
     }
 
-    const manifest = await this.getManifest();
-    let entry = manifest.versions.find((v) => v.id === realVer)
+    const findEntry = (manifest: MojangVersionManifest) =>
+      manifest.versions.find((v) => v.id === realVer)
       || manifest.versions.find((v) => v.id === versionId)
       || manifest.versions.find((v) => v.id.startsWith(versionId));
+
+    let manifest = await this.getManifest();
+    let entry = findEntry(manifest);
+
+    if (!entry || !entry.url) {
+      // The cached manifest may predate a freshly released version; refresh once before failing.
+      manifest = await this.getManifest(true);
+      entry = findEntry(manifest);
+    }
 
     if (!entry || !entry.url) {
       throw new Error(`Minecraft version ${versionId} (${realVer}) not found in official manifest`);

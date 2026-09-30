@@ -11,7 +11,12 @@
     "dist": "npm run build && electron-builder --win",
     "release": "npm run build && electron-builder --win --publish always",
     "installer": "node scripts/build-installer.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "stage:windows": "node scripts/stage-windows-installers.js",
+    "inspect:natives": "node scripts/inspect-native-selection.js",
+    "verify:launch": "node scripts/verify-launch-pipeline.js",
+    "verify:speed": "node scripts/verify-launch-speed.js",
+    "verify:release": "node scripts/verify-release-artifacts.js"
   },
   "keywords": [
     "minecraft",

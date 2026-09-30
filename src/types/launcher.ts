@@ -10,6 +10,8 @@ export interface Instance {
   ramMax: number; // in MB
   javaPath?: string;
   jvmArgs?: string;
+  /** Opt-in: lower the game's graphics settings at launch for more frames per second. */
+  performancePreset?: boolean;
   resolution?: { width: number; height: number };
   icon?: string;
   background?: string;

@@ -410,7 +410,15 @@ export const LauncherProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addNotification('info', 'Launching Minecraft', `Preparing "${target.name}"...`);
 
     if (window.electronAPI) {
-      return await window.electronAPI.launchMinecraft(id);
+      const result = await window.electronAPI.launchMinecraft(id);
+      if (!result.success) {
+        if (result.error === 'Launch cancelled') {
+          addNotification('info', 'Launch Cancelled', `"${target.name}" was cancelled.`);
+        } else {
+          addNotification('error', 'Launch Failed', result.error || 'The game could not be started.');
+        }
+      }
+      return result;
     }
 
     // Realistic Web/Dev Simulation
