@@ -7,7 +7,7 @@ function getGitHubToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
   if (process.env.GH_TOKEN) return process.env.GH_TOKEN;
   try {
-    const creds = execSync('echo protocol=https\nhost=github.com | git credential fill', { encoding: 'utf8' });
+    const creds = execSync('powershell.exe -NoProfile -Command "@(\'protocol=https\', \'host=github.com\') | git credential fill"', { encoding: 'utf8' });
     const match = creds.match(/password=(.+)/);
     if (match) return match[1].trim();
   } catch {}
