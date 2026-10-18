@@ -17,7 +17,8 @@ const EXECUTABLE_MODE = 0o100755 * 65536;
 
 
 const ELECTRON_VERSION = 'v33.4.11';
-const APP_VERSION = '1.1.0-beta.1';
+const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const APP_VERSION = pkg.version || '1.1.0';
 const APP_NAME = 'VictusClient';
 const BUNDLE_ID = 'net.victusclient.launcher';
 

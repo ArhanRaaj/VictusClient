@@ -13,7 +13,8 @@ const asarCandidates = [
 const asarPath = asarCandidates.find(p => fs.existsSync(p));
 
 const ELECTRON_VERSION = 'v33.4.11';
-const APP_VERSION = '1.1.0-beta.1';
+const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const APP_VERSION = pkg.version || '1.1.0';
 const APP_NAME = 'VictusClient';
 
 // 0x81ED0000. Plain multiplication (never `|` / `<<`) because JS bitwise operators return a

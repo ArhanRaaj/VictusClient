@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusCircle, Upload, PackagePlus, Sparkles, Terminal } from 'lucide-react';
+import { Plus, Upload, Package, Shirt, Terminal, Server } from 'lucide-react';
 
 interface QuickActionsProps {
   onOpenCreate: () => void;
@@ -14,68 +14,67 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
 }) => {
   const actions = [
     {
-      title: 'Create Instance',
-      desc: 'Set up a custom client',
-      icon: PlusCircle,
+      title: 'New Profile',
+      desc: 'Custom MC instance',
+      icon: Plus,
       action: onOpenCreate,
-      color: 'from-purple-500 to-indigo-600',
     },
     {
       title: 'Import Pack',
-      desc: 'Zip, CurseForge, MRPack',
+      desc: 'Zip or CurseForge',
       icon: Upload,
       action: onOpenImport,
-      color: 'from-blue-500 to-cyan-600',
     },
     {
-      title: 'Install Mods',
-      desc: 'Browse Modrinth directory',
-      icon: PackagePlus,
+      title: 'Mods & Shaders',
+      desc: 'Modrinth catalog',
+      icon: Package,
       action: () => setActiveTab('contents'),
-      color: 'from-emerald-500 to-teal-600',
     },
     {
-      title: 'Manage Skins',
-      desc: '3D model & capes',
-      icon: Sparkles,
+      title: 'Cloud Servers',
+      desc: 'Free server hosting',
+      icon: Server,
+      action: () => setActiveTab('servers'),
+    },
+    {
+      title: 'Skin Wardrobe',
+      desc: '3D avatars & capes',
+      icon: Shirt,
       action: () => setActiveTab('skins'),
-      color: 'from-amber-500 to-orange-600',
     },
     {
-      title: 'Open Console',
-      desc: 'Live game logs & stats',
+      title: 'Live Console',
+      desc: 'Game logs & debug',
       icon: Terminal,
       action: () => setActiveTab('console'),
-      color: 'from-rose-500 to-pink-600',
     },
   ];
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-          Quick Actions
+      <div className="flex items-center justify-between mb-2.5 px-0.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-white/60 font-mono">
+          Ecosystem & Tools
         </h3>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {actions.map((item, idx) => {
           const Icon = item.icon;
           return (
             <button
               key={idx}
               onClick={item.action}
-              className="flex items-center space-x-3 p-3 rounded-2xl glass-panel border border-white/5 hover:border-[var(--color-border-hover)] hover:bg-white/5 transition-all text-left group"
+              className="flex items-center space-x-2.5 p-2.5 rounded-xl bg-[#0e1017] hover:bg-[#12141e] border border-white/[0.07] hover:border-white/18 transition-all duration-150 text-left group cursor-pointer shadow-sm"
             >
-              <div
-                className={`p-2 rounded-xl bg-gradient-to-br ${item.color} text-white shadow-md group-hover:scale-110 transition-transform`}
-              >
+              <div className="w-8 h-8 rounded-lg bg-white/[0.05] group-hover:bg-white/[0.1] border border-white/[0.08] flex items-center justify-center text-white/70 group-hover:text-white transition-colors shrink-0">
                 <Icon className="w-4 h-4" />
               </div>
-              <div className="overflow-hidden">
-                <div className="text-xs font-bold text-white group-hover:text-[var(--color-primary-light)] transition-colors truncate">
+              <div className="overflow-hidden min-w-0">
+                <div className="text-xs font-semibold text-white/90 group-hover:text-white transition-colors truncate">
                   {item.title}
                 </div>
-                <div className="text-[10px] text-[var(--color-text-muted)] truncate">
+                <div className="text-[10px] text-white/40 truncate font-mono">
                   {item.desc}
                 </div>
               </div>
@@ -86,3 +85,5 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
     </div>
   );
 };
+
+export default QuickActions;

@@ -1,6 +1,6 @@
 {
   "name": "victusclient",
-  "version": "1.1.0-beta.1",
+  "version": "1.1.0",
   "description": "VictusClient - Premium Modern Minecraft Launcher & Client",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -16,7 +16,8 @@
     "inspect:natives": "node scripts/inspect-native-selection.js",
     "verify:launch": "node scripts/verify-launch-pipeline.js",
     "verify:speed": "node scripts/verify-launch-speed.js",
-    "verify:release": "node scripts/verify-release-artifacts.js"
+    "verify:release": "node scripts/verify-release-artifacts.js",
+    "sync:release": "node scripts/sync-release-assets.js"
   },
   "keywords": [
     "minecraft",

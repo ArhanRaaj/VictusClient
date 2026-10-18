@@ -20,7 +20,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const { theme } = useTheme();
-  const sidebarColor = theme.sidebarColor || theme.primaryAccent || '#7c3aed';
+  const accentColor = theme.primaryAccent || '#9333ea';
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
@@ -33,39 +33,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   ];
 
   return (
-    <aside className="w-18 h-full py-2.5 pl-3.5 pr-1 select-none flex flex-col items-center z-40">
-      {/* Sleek Obsidian Glass Floating Capsule with Ambient Glow */}
-      <div
-        className="w-full h-full rounded-[28px] p-2 flex flex-col justify-between items-center relative transition-all duration-300 backdrop-blur-2xl overflow-hidden"
-        style={{
-          background: `linear-gradient(180deg, color-mix(in srgb, ${sidebarColor} 12%, #0e1017) 0%, #0a0b10 50%, color-mix(in srgb, ${sidebarColor} 8%, #090a0e) 100%)`,
-          border: `1.5px solid color-mix(in srgb, ${sidebarColor} 30%, rgba(255, 255, 255, 0.12))`,
-          boxShadow: `0 0 35px color-mix(in srgb, ${sidebarColor} 20%, transparent), 0 16px 40px rgba(0, 0, 0, 0.75), inset 0 1px 1.5px rgba(255, 255, 255, 0.18)`,
-        }}
-      >
-        {/* Subtle Top Ambient Crest Glow in User Chosen Color */}
-        <div
-          className="absolute top-0 inset-x-0 h-24 rounded-t-[28px] pointer-events-none opacity-30 blur-sm"
-          style={{
-            background: `radial-gradient(ellipse at top, ${sidebarColor} 0%, transparent 75%)`,
-          }}
-        />
-
-        {/* Top Nav Buttons (Icons with Active Glow & Floating Tooltip) */}
-        <div className="flex flex-col space-y-3 w-full items-center relative z-10 pt-1">
+    <aside className="w-[72px] h-full py-3 pl-3 pr-1 select-none flex flex-col items-center z-40">
+      {/* Premium Architectural Matte Obsidian Sidebar Chassis */}
+      <div className="w-full h-full rounded-[22px] py-3 px-1.5 flex flex-col justify-between items-center relative transition-colors duration-200 bg-[#0b0c12] border border-white/[0.08] shadow-[0_12px_32px_rgba(0,0,0,0.65)] overflow-hidden">
+        {/* Top Navigation Items */}
+        <div className="flex flex-col space-y-2 w-full items-center relative z-10">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
 
             return (
               <div key={item.id} className="relative group flex items-center justify-center w-full">
-                {/* Discord/Linear-style Left Pill Indicator */}
+                {/* Crisp Left Active Pill Indicator */}
                 {isActive && (
                   <div
-                    className="absolute -left-2 w-1.5 h-6 rounded-r-full transition-all duration-300 animate-pulse"
+                    className="absolute -left-1.5 w-1 h-5 rounded-full transition-all duration-200"
                     style={{
-                      backgroundColor: sidebarColor,
-                      boxShadow: `0 0 12px ${sidebarColor}, 0 0 24px ${sidebarColor}`,
+                      backgroundColor: accentColor,
+                      boxShadow: `0 0 8px ${accentColor}`,
                     }}
                   />
                 )}
@@ -73,36 +58,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
                 <button
                   onClick={() => setActiveTab(item.id)}
                   aria-label={item.label}
-                  className={`w-11 h-11 rounded-[18px] flex items-center justify-center transition-all duration-200 cursor-pointer relative ${
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer relative ${
                     isActive
-                      ? 'scale-105 shadow-lg'
-                      : 'bg-white/[0.04] hover:bg-white/[0.09] text-white/60 hover:text-white border border-white/[0.05] hover:border-white/20 hover:scale-105 active:scale-95'
+                      ? 'bg-white/[0.12] border border-white/[0.18] text-white shadow-sm'
+                      : 'text-white/45 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] active:scale-95'
                   }`}
-                  style={
-                    isActive
-                      ? {
-                          background: `color-mix(in srgb, ${sidebarColor} 24%, rgba(255, 255, 255, 0.08))`,
-                          border: `1.5px solid color-mix(in srgb, ${sidebarColor} 65%, white)`,
-                          boxShadow: `0 0 20px color-mix(in srgb, ${sidebarColor} 45%, transparent), inset 0 1px 1.5px rgba(255, 255, 255, 0.35)`,
-                        }
-                      : undefined
-                  }
                 >
-                  <Icon
-                    className="w-5 h-5 transition-transform duration-200"
-                    style={
-                      isActive
-                        ? {
-                            color: '#ffffff',
-                            filter: `drop-shadow(0 0 8px ${sidebarColor})`,
-                          }
-                        : undefined
-                    }
-                  />
+                  <Icon className="w-[18px] h-[18px] transition-transform duration-150" />
                 </button>
 
-                {/* Sleek Floating Hover Tooltip */}
-                <div className="pointer-events-none absolute left-full ml-3 px-2.5 py-1 rounded-xl bg-[#0f1017]/95 border border-white/15 text-[11px] font-semibold text-white whitespace-nowrap shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 translate-x-[-6px] group-hover:translate-x-0 z-50 backdrop-blur-md">
+                {/* Sleek Minimalist Tooltip */}
+                <div className="pointer-events-none absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141622] border border-white/12 text-[11px] font-medium text-white whitespace-nowrap shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-150 translate-x-[-4px] group-hover:translate-x-0 z-50">
                   {item.label}
                 </div>
               </div>
@@ -110,23 +76,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
           })}
         </div>
 
-        {/* Bottom Pinned Setting Section */}
-        <div className="w-full flex flex-col items-center pb-1 relative z-10">
-          {/* Subtle Hairline Divider */}
-          <div
-            className="w-7 h-[1px] mb-3 rounded-full opacity-40"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${sidebarColor} 40%, rgba(255, 255, 255, 0.15))`,
-            }}
-          />
+        {/* Bottom Pinned Settings Section */}
+        <div className="w-full flex flex-col items-center relative z-10 pt-2">
+          {/* Hairline Divider */}
+          <div className="w-6 h-[1px] mb-2.5 bg-white/[0.08]" />
 
           <div className="relative group flex items-center justify-center w-full">
             {activeTab === 'settings' && (
               <div
-                className="absolute -left-2 w-1.5 h-6 rounded-r-full transition-all duration-300 animate-pulse"
+                className="absolute -left-1.5 w-1 h-5 rounded-full transition-all duration-200"
                 style={{
-                  backgroundColor: sidebarColor,
-                  boxShadow: `0 0 12px ${sidebarColor}, 0 0 24px ${sidebarColor}`,
+                  backgroundColor: accentColor,
+                  boxShadow: `0 0 8px ${accentColor}`,
                 }}
               />
             )}
@@ -134,40 +95,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
             <button
               onClick={() => setActiveTab('settings')}
               aria-label="Settings"
-              className={`w-11 h-11 rounded-[18px] flex items-center justify-center transition-all duration-200 cursor-pointer relative ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150 cursor-pointer relative ${
                 activeTab === 'settings'
-                  ? 'scale-105 shadow-lg'
-                  : 'bg-white/[0.04] hover:bg-white/[0.09] text-white/60 hover:text-white border border-white/[0.05] hover:border-white/20 hover:scale-105 active:scale-95'
+                  ? 'bg-white/[0.12] border border-white/[0.18] text-white shadow-sm'
+                  : 'text-white/45 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] active:scale-95'
               }`}
-              style={
-                activeTab === 'settings'
-                  ? {
-                      background: `color-mix(in srgb, ${sidebarColor} 24%, rgba(255, 255, 255, 0.08))`,
-                      border: `1.5px solid color-mix(in srgb, ${sidebarColor} 65%, white)`,
-                      boxShadow: `0 0 20px color-mix(in srgb, ${sidebarColor} 45%, transparent), inset 0 1px 1.5px rgba(255, 255, 255, 0.35)`,
-                    }
-                  : undefined
-              }
             >
               <Settings
-                className={`w-5 h-5 transition-transform duration-300 ${
-                  activeTab === 'settings'
-                    ? 'text-white'
-                    : 'group-hover:rotate-45'
+                className={`w-[18px] h-[18px] transition-transform duration-300 ${
+                  activeTab === 'settings' ? 'text-white' : 'group-hover:rotate-45'
                 }`}
-                style={
-                  activeTab === 'settings'
-                    ? {
-                        color: '#ffffff',
-                        filter: `drop-shadow(0 0 8px ${sidebarColor})`,
-                      }
-                    : undefined
-                }
               />
             </button>
 
-            {/* Sleek Floating Hover Tooltip */}
-            <div className="pointer-events-none absolute left-full ml-3 px-2.5 py-1 rounded-xl bg-[#0f1017]/95 border border-white/15 text-[11px] font-semibold text-white whitespace-nowrap shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 translate-x-[-6px] group-hover:translate-x-0 z-50 backdrop-blur-md">
+            {/* Sleek Minimalist Tooltip */}
+            <div className="pointer-events-none absolute left-full ml-3 px-2.5 py-1 rounded-lg bg-[#141622] border border-white/12 text-[11px] font-medium text-white whitespace-nowrap shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-150 translate-x-[-4px] group-hover:translate-x-0 z-50">
               Settings
             </div>
           </div>
